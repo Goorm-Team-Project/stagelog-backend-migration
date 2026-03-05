@@ -151,6 +151,14 @@ USE_X_FORWARDED_HOST = True
 
 # 12. AWS S3 (Presigned Upload)
 AWS_REGION = env("AWS_REGION", default=env("AWS_DEFAULT_REGION", default="ap-northeast-2"))
+NOTIFICATION_EVENT_BUS_NAME = env("NOTIFICATION_EVENT_BUS_NAME", default="stagelog-notification-bus")
+OUTBOX_PUBLISH_BATCH_SIZE = env.int("OUTBOX_PUBLISH_BATCH_SIZE", default=50)
+OUTBOX_MAX_RETRIES = env.int("OUTBOX_MAX_RETRIES", default=5)
+OUTBOX_RETRY_BASE_DELAY_SECONDS = env.int("OUTBOX_RETRY_BASE_DELAY_SECONDS", default=30)
+OUTBOX_NOTIFICATION_AGGREGATE_TYPE = env(
+    "OUTBOX_NOTIFICATION_AGGREGATE_TYPE",
+    default="notification",
+)
 
 # 12-1. bucket 키는 여러 이름 fallback 지원
 S3_UPLOAD_BUCKET = env(
