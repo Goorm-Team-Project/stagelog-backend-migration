@@ -1,14 +1,11 @@
 from typing import Optional
-from django.contrib.auth import get_user_model
 
 from common.models import OutboxEvent
 from posts.models import Post
 from events.models import Event
 
-User = get_user_model()
-
 def create_notification(
-    user: User,
+    user_id: int,
     type: str,
     message: str,
     relate_url: Optional[str] = None,
@@ -21,7 +18,7 @@ def create_notification(
     """
     try:
         payload = {
-            "recipient_user_id": user.user_id,
+            "recipient_user_id": user_id,
             "type": type,
             "message": message,
             "relate_url": relate_url,
@@ -31,7 +28,7 @@ def create_notification(
 
         OutboxEvent.objects.create(
             aggregate_type="notification",
-            aggregate_id=str(user.user_id),
+            aggregate_id=str(user_id),
             event_type="notification.requested",
             payload=payload,
         )

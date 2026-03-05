@@ -1,6 +1,5 @@
 import json
 
-from django.shortcuts import render
 from django.core.paginator import Paginator
 from django.db.models import Q, F
 from django.views.decorators.http import require_GET, require_POST, require_http_methods
@@ -47,12 +46,26 @@ def _truncate_250(text: str) -> str:
         return ""
     return text[:250]
 
-def _post_summary(p: Post) -> dict:
+def _get_user_nickname_map(user_ids) -> dict:
+    if not user_ids:
+        return {}
+    rows = User.objects.filter(user_id__in=list(user_ids)).values("user_id", "nickname")
+    return {row["user_id"]: row["nickname"] for row in rows}
+
+
+def _get_event_map(event_ids) -> dict:
+    if not event_ids:
+        return {}
+    rows = Event.objects.filter(event_id__in=list(event_ids)).values("event_id", "title", "poster")
+    return {row["event_id"]: row for row in rows}
+
+
+def _post_summary(p: Post, nickname: str = None) -> dict:
     return {
         "post_id": p.post_id,
         "event_id": p.event_id,
         "user_id": p.user_id,
-        "nickname": getattr(p.user, "nickname", None),
+        "nickname": nickname,
         "category": p.category,
         "title": p.title,
         "created_at": p.created_at.isoformat() if p.created_at else None,
@@ -62,19 +75,19 @@ def _post_summary(p: Post) -> dict:
         "dislike": p.dislike_count,
     }
 
-def _post_detail(p: Post) -> dict:
+def _post_detail(p: Post, nickname: str = None) -> dict:
     return {
-        **_post_summary(p),
+        **_post_summary(p, nickname=nickname),
         "content": p.content,
         "image_url": p.image_url,  # null 가능
     }
 
-def _comment_item(c: Comment) -> dict:
+def _comment_item(c: Comment, nickname: str = None) -> dict:
     return {
         "comment_id": c.comment_id,
         "post_id": c.post_id,
         "user_id": c.user_id,
-        "nickname": getattr(c.user, "nickname", None),
+        "nickname": nickname,
         "content": c.content,
         "created_at": c.created_at.isoformat() if c.created_at else None,
         "updated_at": c.updated_at.isoformat() if c.updated_at else None,
@@ -97,7 +110,7 @@ def posts_list(request):
     if page <= 0 or size <= 0 or size > 100:
         return common_response(False, message="page는 1 이상, size는 1~100 범위에 포함되어야 합니다.", status=400)
 
-    qs = Post.objects.select_related("user", "event")
+    qs = Post.objects.all()
 
     if category:
         if category not in ("후기", "질문", "정보"):
@@ -116,11 +129,15 @@ def posts_list(request):
 
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
+    page_posts = list(page_obj.object_list)
+    user_map = _get_user_nickname_map({p.user_id for p in page_posts})
+    event_map = _get_event_map({p.event_id for p in page_posts})
 
     posts = []
-    for p in page_obj.object_list:
+    for p in page_posts:
+        event_info = event_map.get(p.event_id) or {}
         posts.append({
-            **_post_summary(p),
+            **_post_summary(p, nickname=user_map.get(p.user_id)),
 
             # 전체 게시글 목록: content는 250자 프리뷰 제한
             "content": _truncate_250(p.content),
@@ -128,8 +145,8 @@ def posts_list(request):
             # 커뮤니티 리스트에 “어느 공연 글인지” 필요
             "event": {
                 "event_id": p.event_id,
-                "title": getattr(p.event, "title", None),
-                "poster": getattr(p.event, "poster", None),
+                "title": event_info.get("title"),
+                "poster": event_info.get("poster"),
             }
         })
 
@@ -179,7 +196,7 @@ def event_posts_list(request, event_id: int):
     except ValueError:
         return common_response(False, message="page/size는 정수여야 합니다.", status=400)
 
-    qs = Post.objects.filter(event_id=event_id).select_related("user")
+    qs = Post.objects.filter(event_id=event_id)
 
     # '전체'는 category 파라미터 안보내는 방식으로 처리
     if category:
@@ -200,10 +217,12 @@ def event_posts_list(request, event_id: int):
     
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
+    page_posts = list(page_obj.object_list)
+    user_map = _get_user_nickname_map({p.user_id for p in page_posts})
 
     data = {
         "event": event_meta,
-        "posts": [_post_summary(p) for p in page_obj.object_list],
+        "posts": [_post_summary(p, nickname=user_map.get(p.user_id)) for p in page_posts],
         "total_count": paginator.count,
         "total_pages": paginator.num_pages,
         "page": page_obj.number,
@@ -251,8 +270,9 @@ def event_posts_create(request, event_id: int):
     except Exception:
         exp_result = None
 
-    p = Post.objects.select_related("user").get(post_id=p.post_id)
-    resp = _post_detail(p)
+    p = Post.objects.get(post_id=p.post_id)
+    user_map = _get_user_nickname_map({p.user_id})
+    resp = _post_detail(p, nickname=user_map.get(p.user_id))
     if exp_result is not None:
         resp["exp_result"] = exp_result
     return common_response(True, data=resp, message="게시글 작성 성공", status=201)
@@ -282,9 +302,9 @@ def post_detail(request, post_id: int):
     if updated == 0:
         return common_response(False, message="존재하지 않는 게시글입니다.", status=404)
     
-    p = Post.objects.select_related("user").get(post_id=post_id)
-
-    detail = _post_detail(p)
+    p = Post.objects.get(post_id=post_id)
+    user_map = _get_user_nickname_map({p.user_id})
+    detail = _post_detail(p, nickname=user_map.get(p.user_id))
 
     # Authorization이 있을 때만 my_reaction 추가
     if auth_header:
@@ -339,8 +359,9 @@ def post_update(request, post_id: int):
         return common_response(False, message="수정할 필드가 없습니다.", status=400)
 
     p.save()
-    p = Post.objects.select_related("user").get(post_id=post_id)
-    return common_response(True, data=_post_detail(p), message="게시글 수정 성공", status=200)
+    p = Post.objects.get(post_id=post_id)
+    user_map = _get_user_nickname_map({p.user_id})
+    return common_response(True, data=_post_detail(p, nickname=user_map.get(p.user_id)), message="게시글 수정 성공", status=200)
 
 
 @csrf_exempt
@@ -373,13 +394,15 @@ def post_comments_list(request, post_id: int):
     except ValueError:
         return common_response(False, message="page/size는 정수여야 합니다.", status=400)
 
-    qs = Comment.objects.filter(post_id=post_id).select_related("user").order_by("-created_at", "-comment_id")
+    qs = Comment.objects.filter(post_id=post_id).order_by("-created_at", "-comment_id")
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
+    page_comments = list(page_obj.object_list)
+    user_map = _get_user_nickname_map({c.user_id for c in page_comments})
 
     data = {
         "post_id": post_id,
-        "comments": [_comment_item(c) for c in page_obj.object_list],
+        "comments": [_comment_item(c, nickname=user_map.get(c.user_id)) for c in page_comments],
         "total_count": paginator.count,
         "total_pages": paginator.num_pages,
         "page": page_obj.number,
@@ -393,7 +416,7 @@ def post_comments_list(request, post_id: int):
 @require_POST
 def comment_create(request, post_id: int):
     try:
-        post = Post.objects.select_related("user", "event").get(post_id=post_id)
+        post = Post.objects.get(post_id=post_id)
     except Post.DoesNotExist:
         return common_response(False, message="존재하지 않는 게시글입니다.", status=404)
 
@@ -410,19 +433,18 @@ def comment_create(request, post_id: int):
         user_id=request.user_id,
         content=content,
     )
-    c = Comment.objects.select_related("user").get(comment_id=c.comment_id)
+    c = Comment.objects.get(comment_id=c.comment_id)
 
     # 댓글 작성 성공 후: 게시글 작성자에게 알림 (자기 글에 자기 댓글은 제외)
     if post.user_id != request.user_id:
         # create_notification 내부에서도 try/except 처리+호출도 안전하게 유지
         try:
             create_notification(
-                user=post.user,
+                user_id=post.user_id,
                 type="comment",
                 message="회원님의 게시글에 새로운 댓글이 달렸어요.",
                 relate_url=f"/posts/{post.post_id}#comment-{c.comment_id}",
                 post=post,
-                event=getattr(post, "event", None),
             )
         except Exception:
             pass
@@ -434,7 +456,8 @@ def comment_create(request, post_id: int):
     except Exception:
         exp_result = None
 
-    resp = _comment_item(c)
+    user_map = _get_user_nickname_map({c.user_id})
+    resp = _comment_item(c, nickname=user_map.get(c.user_id))
     if exp_result is not None:
         resp["exp_result"] = exp_result
 
@@ -468,8 +491,9 @@ def comment_detail(request, comment_id: int):
 
     c.content = content
     c.save()
-    c = Comment.objects.select_related("user").get(comment_id=comment_id)
-    return common_response(True, data=_comment_item(c), message="댓글 수정 성공", status=200)
+    c = Comment.objects.get(comment_id=comment_id)
+    user_map = _get_user_nickname_map({c.user_id})
+    return common_response(True, data=_comment_item(c, nickname=user_map.get(c.user_id)), message="댓글 수정 성공", status=200)
 
 
 
@@ -549,18 +573,17 @@ def _toggle_reaction(request, post_id: int, target_type: str):
         # 리액션 성공 후: 게시글 작성자에게 알림 (자기 글에 자기 반응 제외)
         if author_id is not None and author_id != request.user_id and new_state in (ReactionType.LIKE, ReactionType.DISLIKE):
             try:
-                post_obj = Post.objects.select_related("user", "event").get(post_id=post_id)
+                post_obj = Post.objects.get(post_id=post_id)
 
                 noti_type = "post_like" if new_state == ReactionType.LIKE else "post_dislike"
                 noti_msg = "회원님의 게시글에 👍 좋아요가 눌렸어요." if new_state == ReactionType.LIKE else "회원님의 게시글에 👎 싫어요가 눌렸어요."
 
                 create_notification(
-                    user=post_obj.user,
+                    user_id=post_obj.user_id,
                     type=noti_type,
                     message=noti_msg,
                     relate_url=f"/posts/{post_obj.post_id}",
                     post=post_obj,
-                    event=getattr(post_obj, "event", None),
                 )
             except Exception:
                 pass

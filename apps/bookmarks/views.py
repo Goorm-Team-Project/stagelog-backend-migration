@@ -1,7 +1,6 @@
 # apps/bookmarks/views.py
 
 from django.views.decorators.http import require_http_methods, require_safe
-from django.contrib.auth import get_user_model
 from apps.common.utils import common_response, login_check
 from events.models import Event
 from bookmarks.models import Bookmark
@@ -9,30 +8,25 @@ from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count
 
-User = get_user_model()
-
 @csrf_exempt
 @require_http_methods(["POST"]) # POST만 허용
 @login_check # 토큰 검증 필수
 def toggle_bookmark(request, event_id):
     try:
         user_id = request.user_id
-        
-        # 1. 유저 & 공연 객체 조회
-        try:
-            user = User.objects.get(user_id=user_id)
-            event = Event.objects.get(event_id=event_id)
-        except (User.DoesNotExist, Event.DoesNotExist):
-            return common_response(False, message="잘못된 요청입니다(유저 또는 공연 없음).", status=404)
+
+        # 공연 존재 여부는 events 서비스 DB에서 확인
+        if not Event.objects.filter(event_id=event_id).exists():
+            return common_response(False, message="존재하지 않는 공연입니다.", status=404)
 
         # 2. 토글 로직 (있으면 삭제, 없으면 생성)
-        bookmark = Bookmark.objects.filter(user=user, event=event).first()
+        bookmark = Bookmark.objects.filter(user_id=user_id, event_id=event_id).first()
 
         if bookmark:
             bookmark.delete()
             return common_response(True, message="북마크 취소됨", data={"state": "off"}, status=200)
         else:
-            Bookmark.objects.create(user=user, event=event)
+            Bookmark.objects.create(user_id=user_id, event_id=event_id)
             return common_response(True, message="북마크 성공!", data={"state": "on"}, status=201)
 
     except Exception as e:
@@ -50,10 +44,15 @@ def mypage(request):
                                         .order_by('-created_at')\
                                         .values_list('event_id', flat=True)
 
-        qs = Event.objects.filter(event_id__in=list(my_booked_ids))\
-                          .annotate(favorite_count=Count('bookmarks'))
+        my_booked_ids = list(my_booked_ids)
+        qs = Event.objects.filter(event_id__in=my_booked_ids).order_by('-start_date')
 
-        qs = qs.order_by('-start_date')
+        favorite_rows = (
+            Bookmark.objects.filter(event_id__in=my_booked_ids)
+            .values("event_id")
+            .annotate(favorite_count=Count("event_id"))
+        )
+        favorite_count_map = {row["event_id"]: row["favorite_count"] for row in favorite_rows}
 
         paginator = Paginator(qs, page_size)
 
@@ -72,7 +71,7 @@ def mypage(request):
                 "end_date": event.end_date.strftime('%Y-%m-%d') if event.end_date else None,
                 "venue": event.venue,
                 "poster": event.poster if event.poster else None,
-                "favorite_count": event.favorite_count 
+                "favorite_count": favorite_count_map.get(event.event_id, 0),
             })
 
         return common_response(

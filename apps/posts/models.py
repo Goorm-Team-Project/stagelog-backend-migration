@@ -1,24 +1,12 @@
 from django.db import models
-from django.conf import settings
 
 # Create your models here.
 
 class Post(models.Model):
     post_id = models.BigAutoField(primary_key=True)
 
-    event = models.ForeignKey(
-        "events.Event",
-        on_delete=models.CASCADE,
-        db_column="event_id",
-        related_name="posts",
-    )
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        db_column="user_id",
-        related_name="posts",
-    )
+    event_id = models.BigIntegerField()
+    user_id = models.BigIntegerField()
 
     #ERD: category ENUM (문자열 시작 -> 추후 choices로)
     category = models.CharField(max_length=30)
@@ -40,8 +28,8 @@ class Post(models.Model):
     class Meta:
         db_table = "posts"
         indexes = [
-            models.Index(fields=["event"]),
-            models.Index(fields=["user"]),
+            models.Index(fields=["event_id"]),
+            models.Index(fields=["user_id"]),
             models.Index(fields=["category"]),
         ]
 
@@ -52,12 +40,7 @@ class Post(models.Model):
 class Comment(models.Model):
     comment_id = models.BigAutoField(primary_key=True)
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        db_column="user_id",
-        related_name="comments",
-    )
+    user_id = models.BigIntegerField()
 
     post = models.ForeignKey(
         "posts.Post",
@@ -74,7 +57,7 @@ class Comment(models.Model):
         db_table = "comments"
         indexes = [
             models.Index(fields=["post"]),
-            models.Index(fields=["user"]),
+            models.Index(fields=["user_id"]),
             models.Index(fields=["created_at"]),
         ]
 
@@ -95,12 +78,7 @@ class PostReaction(models.Model):
         related_name="reactions",
     )
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        db_column="user_id",
-        related_name="post_reactions",
-    )
+    user_id = models.BigIntegerField()
 
     # ERD: type ENUM
     type = models.CharField(max_length=10, choices=ReactionType.choices)
@@ -109,11 +87,11 @@ class PostReaction(models.Model):
         db_table = "post_reactions"
         constraints = [
             # 중복 방지 (1유저 1리액션)
-            models.UniqueConstraint(fields=["user", "post"], name="uq_post_reactions_user_post"),
+            models.UniqueConstraint(fields=["user_id", "post"], name="uq_post_reactions_user_post"),
         ]
         indexes = [
             models.Index(fields=["post"]),
-            models.Index(fields=["user"]),
+            models.Index(fields=["user_id"]),
             models.Index(fields=["type"]),
         ]
 
@@ -131,12 +109,7 @@ class Report(models.Model):
         related_name="reports",
     )
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        db_column="user_id",
-        related_name="reports",
-    )
+    user_id = models.BigIntegerField()
 
     reason_category = models.CharField(max_length=30)
     reason_detail = models.TextField(null=True, blank=True)
@@ -146,11 +119,11 @@ class Report(models.Model):
         db_table = "reports"
         constraints = [
             # 중복 신고 방지(1유저 1게시글 1회만 신고)
-            models.UniqueConstraint(fields=["user", "post"], name="uq_reports_user_post"),
+            models.UniqueConstraint(fields=["user_id", "post"], name="uq_reports_user_post"),
         ]
         indexes = [
             models.Index(fields=["post"]),
-            models.Index(fields=["user"]),
+            models.Index(fields=["user_id"]),
             models.Index(fields=["reason_category"]),
         ]
 

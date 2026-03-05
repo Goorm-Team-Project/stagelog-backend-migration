@@ -1,33 +1,11 @@
 from django.db import models
-from django.conf import settings
 
 class Notification(models.Model):
     notification_id = models.BigAutoField(primary_key=True)
 
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='notifications',
-        db_column='user_id'
-    )
-
-    post = models.ForeignKey(
-        'posts.Post',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='notifications',
-        db_column='post_id'
-    )
-
-    event = models.ForeignKey(
-        'events.Event',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='notifications',
-        db_column='event_id'
-    )
+    user_id = models.BigIntegerField()
+    post_id = models.BigIntegerField(null=True, blank=True)
+    event_id = models.BigIntegerField(null=True, blank=True)
     
     relate_url = models.CharField(
         max_length=255,
