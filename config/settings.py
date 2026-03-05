@@ -16,16 +16,6 @@ DEBUG = env('DEBUG')
 db_mode = env('DB_MODE', default='sqlite')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
-KAKAO_REST_API_KEY = env('KAKAO_REST_API_KEY', default='')
-KAKAO_REDIRECT_URI = env('KAKAO_REDIRECT_URI', default='')
-KAKAO_ACCESS_TOKEN_CLIENT_SECRET = env('KAKAO_ACCESS_TOKEN_CLIENT_SECRET', default='')
-NAVER_REST_API_KEY = env('NAVER_REST_API_KEY', default='')
-NAVER_REDIRECT_URI = env('NAVER_REDIRECT_URI', default='')
-NAVER_ACCESS_TOKEN_CLIENT_SECRET = env('NAVER_ACCESS_TOKEN_CLIENT_SECRET', default='')
-GOOGLE_REST_API_KEY = env('GOOGLE_REST_API_KEY', default='')
-GOOGLE_ACCESS_TOKEN_CLIENT_SECRET = env('GOOGLE_ACCESS_TOKEN_CLIENT_SECRET', default='')
-GOOGLE_REDIRECT_URI = env('GOOGLE_REDIRECT_URI', default='')
-
 # 2. 앱 설정 (DRF, SimpleJWT 제거)
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -87,22 +77,35 @@ if db_mode == 'sqlite':
     }
 else:    
     DATABASES = {
-        'default': {
-            'ENGINE': 'django.db.backends.mysql',
-            'NAME': 'stagelog',
-            'USER': 'admin',
-            'PASSWORD': os.environ.get('DB_PASSWORD', ''),
-            'HOST': os.environ.get('DB_HOST', ''),
-            'PORT': '3306',
-            'OPTIONS': {
-                'ssl': {
-                    'ca': None,#os.path.join(BASE_DIR, 'certs/global-bundle.pem'),
-                },
-                'ssl_mode': 'REQUIRED',
-                'charset': 'utf8mb4',
-            },
-        }
+        "default": {  # 일단 core를 default로 두는 걸 권장
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ["DB_NAME_CORE"],      # stagelog_core
+            "USER": os.environ["DB_USER_CORE"],
+            "PASSWORD": os.environ["DB_PASSWORD_CORE"],
+            "HOST": os.environ["DB_HOST"],
+            "PORT": "3306",
+            "OPTIONS": {"charset": "utf8mb4"},
+        },
+        "auth_db": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ["DB_NAME_AUTH"],      # stagelog_auth
+            "USER": os.environ["DB_USER_AUTH"],
+            "PASSWORD": os.environ["DB_PASSWORD_AUTH"],
+            "HOST": os.environ["DB_HOST"],
+            "PORT": "3306",
+            "OPTIONS": {"charset": "utf8mb4"},
+        },
+        "events_db": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ["DB_NAME_EVENTS"],    # stagelog_events
+            "USER": os.environ["DB_USER_EVENTS"],
+            "PASSWORD": os.environ["DB_PASSWORD_EVENTS"],
+            "HOST": os.environ["DB_HOST"],
+            "PORT": "3306",
+            "OPTIONS": {"charset": "utf8mb4"},
+        },
     }
+    DATABASE_ROUTERS = ['config.db_router.ServiceDbRouter']
 
 
 # 4. 커스텀 유저 모델
