@@ -11,6 +11,7 @@ class ServiceDbRouter:
 
     AUTH_APP_LABELS = {"users", "auth", "admin", "contenttypes"}
     EVENTS_APP_LABELS = {"events"}
+    SHARED_APP_LABELS = {"common"}
 
     def _target_db(self, app_label: str) -> str:
         dbs = settings.DATABASES.keys()
@@ -35,4 +36,6 @@ class ServiceDbRouter:
         return None
 
     def allow_migrate(self, db, app_label, model_name=None, **hints):
+        if app_label in self.SHARED_APP_LABELS:
+            return db in {"default", "auth_db", "events_db"}
         return db == self._target_db(app_label)
