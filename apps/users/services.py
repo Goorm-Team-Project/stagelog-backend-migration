@@ -1,6 +1,5 @@
 import math
 from users.models import User
-from notifications.models import Notification
 from notifications.services import create_notification
 from django.db import transaction, models
 
@@ -74,7 +73,7 @@ def apply_user_exp(user: User, type: ExpPolicy):
     if is_levelup:
         create_notification(
             user=user,
-            type=Notification.Type.NOTICE,
+            type="notice",
             message=f"레벨이 {user.level} 로 올랐습니다!",
             relate_url="/api/users/me"
         )

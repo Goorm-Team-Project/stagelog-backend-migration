@@ -16,15 +16,15 @@ DEBUG = env('DEBUG')
 db_mode = env('DB_MODE', default='sqlite')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
 
-KAKAO_REST_API_KEY = env('KAKAO_REST_API_KEY')
-KAKAO_REDIRECT_URI = env('KAKAO_REDIRECT_URI')
-KAKAO_ACCESS_TOKEN_CLIENT_SECRET = env('KAKAO_ACCESS_TOKEN_CLIENT_SECRET')
-NAVER_REST_API_KEY = env('NAVER_REST_API_KEY')
-NAVER_REDIRECT_URI = env('NAVER_REDIRECT_URI')
-NAVER_ACCESS_TOKEN_CLIENT_SECRET = env('NAVER_ACCESS_TOKEN_CLIENT_SECRET')
-GOOGLE_REST_API_KEY = env('GOOGLE_REST_API_KEY')
-GOOGLE_ACCESS_TOKEN_CLIENT_SECRET = env('GOOGLE_ACCESS_TOKEN_CLIENT_SECRET')
-GOOGLE_REDIRECT_URI = env('GOOGLE_REDIRECT_URI')
+KAKAO_REST_API_KEY = env('KAKAO_REST_API_KEY', default='')
+KAKAO_REDIRECT_URI = env('KAKAO_REDIRECT_URI', default='')
+KAKAO_ACCESS_TOKEN_CLIENT_SECRET = env('KAKAO_ACCESS_TOKEN_CLIENT_SECRET', default='')
+NAVER_REST_API_KEY = env('NAVER_REST_API_KEY', default='')
+NAVER_REDIRECT_URI = env('NAVER_REDIRECT_URI', default='')
+NAVER_ACCESS_TOKEN_CLIENT_SECRET = env('NAVER_ACCESS_TOKEN_CLIENT_SECRET', default='')
+GOOGLE_REST_API_KEY = env('GOOGLE_REST_API_KEY', default='')
+GOOGLE_ACCESS_TOKEN_CLIENT_SECRET = env('GOOGLE_ACCESS_TOKEN_CLIENT_SECRET', default='')
+GOOGLE_REDIRECT_URI = env('GOOGLE_REDIRECT_URI', default='')
 
 # 2. 앱 설정 (DRF, SimpleJWT 제거)
 INSTALLED_APPS = [
@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'corsheaders', # CORS는 필수
 
     # Local Apps
+    'common',
     'users',
     'events',
     'posts',
@@ -132,9 +133,10 @@ if not DEBUG:
     CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
 # 9. JWT 설정 (수동 구현용 변수)
+# Auth service로 이동하여 현재 API에서는 직접 사용하지 않음(참고용 유지)
 # SimpleJWT 설정은 제거하고, 직접 구현 시 사용할 알고리즘/만료시간만 환경변수나 상수로 관리 추천
-JWT_ALGORITHM = 'HS256'
-JWT_EXP_DELTA_SECONDS = env.int('JWT_EXP_DELTA_SECONDS', default= 60 * 30)
+# JWT_ALGORITHM = 'HS256'
+# JWT_EXP_DELTA_SECONDS = env.int('JWT_EXP_DELTA_SECONDS', default= 60 * 30)
 
 # 10. 정적파일경로설정
 STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')

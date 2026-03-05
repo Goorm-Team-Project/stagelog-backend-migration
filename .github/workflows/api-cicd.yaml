@@ -7,6 +7,7 @@ on:
 
 jobs:
   build-and-push:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,6 +35,7 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/stagelog-repo:api-${{ steps.current-time.outputs.formattedTime }}
 
   deploy:
+    if: ${{ false }}
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:

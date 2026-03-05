@@ -19,7 +19,6 @@ from django.urls import path, include
 
 from events import views as events_views
 from posts import views as posts_views
-from notifications import views as notifications_views
 from uploads import views as uploads_views
 from common.utils import health_check
 
@@ -28,7 +27,8 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # Auth / Users (login 라우팅)
-    path('api/auth/', include('users.urls')),
+    # NOTE: auth service 분리로 인해 다음 라우트는 임시 제거 대상
+    # path('api/auth/', include('users.urls')),
     path('api/users/', include('users.urls')),
 
     # Bookmarks 라우팅
@@ -47,9 +47,9 @@ urlpatterns = [
     # Comments 라우팅
     path('api/comments/', include('posts.comment_urls')),
 
-    # Notifications 라우팅
-    path('api/notifications', notifications_views.get_notification_list, name='get_notification_list'),
-    path('api/notifications/', include('notifications.urls')),
+    # Notifications 라우팅 [notification-service 이관]
+    # path('api/notifications', notifications_views.get_notification_list, name='get_notification_list'),
+    # path('api/notifications/', include('notifications.urls')),
 
     path('', health_check),
 
