@@ -10,11 +10,9 @@ from events.models import Event
 NOTIFICATION_DETAIL_TYPE_MAP = {
     "comment": "notification.comment.created",
     "post_like": "notification.post.liked",
-    "reply": "notification.reply.created",
+    "post_dislike": "notification.post.disliked",
+    "event": "notification.event.updated",
     "notice": "notification.system.broadcast",
-    # 현재 EventBridge rule에 post_dislike가 없어 운영 중 손실 방지를 위해 system으로 우회
-    "post_dislike": "notification.system.broadcast",
-    "event": "notification.system.broadcast",
 }
 
 
