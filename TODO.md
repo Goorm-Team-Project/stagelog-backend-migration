@@ -17,5 +17,7 @@
   - `deploy/k8s/notification-consumer-deployment.yaml`의 `image`, `serviceAccountName`, `secretRef` 실제 값으로 치환
   - `deploy/k8s/notification-consumer-scaledobject.yaml`의 `queueURL` 실제 값으로 치환
   - 워커 ServiceAccount에 SQS(`ReceiveMessage`,`DeleteMessage`,`GetQueueAttributes`) + DynamoDB(`PutItem`) 권한(IRSA/Role) 연결
+  - `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_SSL` 시크릿 반영
+  - Redis 연결 성공 여부 및 dedupe 키(`noti:dedupe:event:*`) 생성 확인
   - `kubectl apply -f deploy/k8s/notification-consumer-deployment.yaml`
   - `kubectl apply -f deploy/k8s/notification-consumer-scaledobject.yaml`

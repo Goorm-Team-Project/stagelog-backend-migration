@@ -5,6 +5,7 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.utils import timezone
+import redis
 
 
 def _sqs_client():
@@ -14,6 +15,19 @@ def _sqs_client():
 def _notification_table():
     dynamodb = boto3.resource("dynamodb", region_name=settings.AWS_REGION)
     return dynamodb.Table(settings.NOTIFICATION_DDB_TABLE_NAME)
+
+
+def _redis_client():
+    return redis.Redis(
+        host=settings.REDIS_HOST,
+        port=settings.REDIS_PORT,
+        db=settings.REDIS_DB,
+        password=settings.REDIS_PASSWORD or None,
+        ssl=settings.REDIS_SSL,
+        decode_responses=True,
+        socket_timeout=1,
+        socket_connect_timeout=1,
+    )
 
 
 def _parse_sqs_message_body(body: str) -> dict:
@@ -65,6 +79,26 @@ def _to_dynamodb_item(detail: dict) -> dict:
     }
 
 
+def _mark_event_deduped(rds, event_id: str) -> bool:
+    """
+    True: 처음 처리 이벤트
+    False: 이미 처리된 이벤트(중복)
+    """
+    if not event_id:
+        return True
+    key = f"noti:dedupe:event:{event_id}"
+    created = rds.set(key, "1", ex=settings.NOTIFICATION_DEDUPE_TTL_SECONDS, nx=True)
+    return bool(created)
+
+
+def _incr_unread_cache(rds, user_id: int):
+    if not user_id:
+        return
+    key = f"noti:unread:{user_id}"
+    rds.incr(key)
+    rds.expire(key, settings.NOTIFICATION_UNREAD_CACHE_TTL_SECONDS)
+
+
 def consume_notification_batch(
     *,
     queue_url: str,
@@ -76,6 +110,13 @@ def consume_notification_batch(
 
     sqs = _sqs_client()
     table = _notification_table()
+    redis_client = None
+    if settings.REDIS_HOST:
+        try:
+            redis_client = _redis_client()
+            redis_client.ping()
+        except Exception:
+            redis_client = None
 
     receive_kwargs = {
         "QueueUrl": queue_url,
@@ -96,12 +137,21 @@ def consume_notification_batch(
         receipt_handle = msg.get("ReceiptHandle")
         try:
             detail = _parse_sqs_message_body(msg.get("Body", ""))
+            event_id = detail.get("event_id")
+            if redis_client and not _mark_event_deduped(redis_client, event_id):
+                if receipt_handle:
+                    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+                    deleted += 1
+                continue
+
             item = _to_dynamodb_item(detail)
             table.put_item(
                 Item=item,
                 ConditionExpression="attribute_not_exists(pk) AND attribute_not_exists(sk)",
             )
             saved += 1
+            if redis_client:
+                _incr_unread_cache(redis_client, item.get("recipient_user_id"))
 
             if receipt_handle:
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
