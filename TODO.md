@@ -21,3 +21,9 @@
   - Redis 연결 성공 여부 및 dedupe 키(`noti:dedupe:event:*`) 생성 확인
   - `kubectl apply -f deploy/k8s/notification-consumer-deployment.yaml`
   - `kubectl apply -f deploy/k8s/notification-consumer-scaledobject.yaml`
+
+- [ ] AutoBan(IP 필터링) Redis 공유 연결
+  - API 파드 시크릿에 `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_SSL` 반영
+  - API 파드 시크릿에 `AUTO_BAN_ENABLED`, `AUTO_BAN_LIMIT_WINDOW_SECONDS`, `AUTO_BAN_MAX_REQUESTS`, `AUTO_BAN_BLOCK_TIME_SECONDS` 반영
+  - API Deployment 롤링 재시작 후 `common.middleware.AutoBanMiddleware` 활성화 확인
+  - 여러 파드에서 동일 IP 차단 상태 공유되는지 확인 (`block_<ip>`, `req_count_<ip>` 키)

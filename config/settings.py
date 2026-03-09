@@ -40,6 +40,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware', # 최상단
     'django.middleware.security.SecurityMiddleware',
+    'common.middleware.AutoBanMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -186,3 +187,29 @@ REDIS_PORT = env.int("REDIS_PORT", default=6379)
 REDIS_DB = env.int("REDIS_DB", default=0)
 REDIS_PASSWORD = env("REDIS_PASSWORD", default="")
 REDIS_SSL = env.bool("REDIS_SSL", default=False)
+
+# 15. Auto Ban (IP filter)
+AUTO_BAN_ENABLED = env.bool("AUTO_BAN_ENABLED", default=False)
+AUTO_BAN_LIMIT_WINDOW_SECONDS = env.int("AUTO_BAN_LIMIT_WINDOW_SECONDS", default=60)
+AUTO_BAN_MAX_REQUESTS = env.int("AUTO_BAN_MAX_REQUESTS", default=100)
+AUTO_BAN_BLOCK_TIME_SECONDS = env.int("AUTO_BAN_BLOCK_TIME_SECONDS", default=3600)
+
+# 16. Cache (Redis 공유 / 로컬 fallback)
+if REDIS_HOST:
+    redis_auth = ""
+    if REDIS_PASSWORD:
+        redis_auth = f":{REDIS_PASSWORD}@"
+    redis_scheme = "rediss" if REDIS_SSL else "redis"
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": f"{redis_scheme}://{redis_auth}{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "unique-snowflake",
+        }
+    }
