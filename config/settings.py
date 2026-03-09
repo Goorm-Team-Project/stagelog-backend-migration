@@ -151,6 +151,19 @@ USE_X_FORWARDED_HOST = True
 
 # 12. AWS S3 (Presigned Upload)
 AWS_REGION = env("AWS_REGION", default=env("AWS_DEFAULT_REGION", default="ap-northeast-2"))
+
+# 12-1. bucket 키는 여러 이름 fallback 지원
+S3_UPLOAD_BUCKET = env(
+    "S3_UPLOAD_BUCKET",
+    default=env("AWS_STORAGE_BUCKET_NAME", default=env("S3_BUCKET", default="")),
+)
+
+S3_UPLOAD_PREFIX = env("S3_UPLOAD_PREFIX", default="uploads/")
+S3_PRESIGN_EXPIRES = env.int("S3_PRESIGN_EXPIRES", default=300)
+
+S3_PUBLIC_BASE_URL = env("S3_PUBLIC_BASE_URL", default=None)
+
+# 13. Notification/Outbox Worker Settings
 NOTIFICATION_EVENT_BUS_NAME = env("NOTIFICATION_EVENT_BUS_NAME", default="stagelog-notification-bus")
 NOTIFICATION_SQS_QUEUE_URL = env("NOTIFICATION_SQS_QUEUE_URL", default="")
 NOTIFICATION_DDB_TABLE_NAME = env("NOTIFICATION_DDB_TABLE_NAME", default="stagelog-notifications")
@@ -164,14 +177,3 @@ OUTBOX_NOTIFICATION_AGGREGATE_TYPE = env(
     "OUTBOX_NOTIFICATION_AGGREGATE_TYPE",
     default="notification",
 )
-
-# 12-1. bucket 키는 여러 이름 fallback 지원
-S3_UPLOAD_BUCKET = env(
-    "S3_UPLOAD_BUCKET",
-    default=env("AWS_STORAGE_BUCKET_NAME", default=env("S3_BUCKET", default="")),
-)
-
-S3_UPLOAD_PREFIX = env("S3_UPLOAD_PREFIX", default="uploads/")
-S3_PRESIGN_EXPIRES = env.int("S3_PRESIGN_EXPIRES", default=300)
-
-S3_PUBLIC_BASE_URL = env("S3_PUBLIC_BASE_URL", default=None)
