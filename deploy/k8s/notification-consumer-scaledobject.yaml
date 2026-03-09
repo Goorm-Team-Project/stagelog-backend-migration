@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: stagelog-notification-consumer
+spec:
+  scaleTargetRef:
+    name: stagelog-notification-consumer
+  pollingInterval: 5
+  cooldownPeriod: 30
+  minReplicaCount: 1
+  maxReplicaCount: 10
+  triggers:
+  - type: aws-sqs-queue
+    metadata:
+      # 실제 SQS URL로 교체
+      queueURL: https://sqs.ap-northeast-2.amazonaws.com/<account-id>/stagelog-notification-queue
+      awsRegion: ap-northeast-2
+      queueLength: "20"
+      identityOwner: pod
