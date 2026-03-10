@@ -1,5 +1,11 @@
 # TODO
 
+- [ ] 환경변수 파일 분리 적용
+  - API: `.env.api`
+  - Outbox Worker: `.env.outbox-worker`
+  - Notification Consumer: `.env.notification-consumer`
+  - 통합 참조: `.env.migration`
+
 - [ ] 멀티 DB 마이그레이션 실행
   - `python manage.py migrate --database=default`
   - `python manage.py migrate --database=auth_db`
@@ -27,3 +33,6 @@
   - API 파드 시크릿에 `AUTO_BAN_ENABLED`, `AUTO_BAN_LIMIT_WINDOW_SECONDS`, `AUTO_BAN_MAX_REQUESTS`, `AUTO_BAN_BLOCK_TIME_SECONDS` 반영
   - API Deployment 롤링 재시작 후 `common.middleware.AutoBanMiddleware` 활성화 확인
   - 여러 파드에서 동일 IP 차단 상태 공유되는지 확인 (`block_<ip>`, `req_count_<ip>` 키)
+
+- [ ] 배포 검증 문서 기준 점검 수행
+  - `DEPLOY_VERIFICATION.md` 순서대로 E2E 및 실패경로 점검

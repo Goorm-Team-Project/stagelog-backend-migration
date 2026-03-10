@@ -10,7 +10,7 @@ __pycache__/
 db.sqlite3
 
 # 개발 환경
-.env
+.env.*
 
 # 인증서
 certs/
