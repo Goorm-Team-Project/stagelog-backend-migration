@@ -466,13 +466,15 @@ def comment_create(request, post_id: int):
     if post.user_id != request.user_id:
         # create_notification 내부에서도 try/except 처리+호출도 안전하게 유지
         try:
-            create_notification(
-                user_id=post.user_id,
-                type="comment",
-                message="회원님의 게시글에 새로운 댓글이 달렸어요.",
-                relate_url=f"/posts/{post.post_id}#comment-{c.comment_id}",
-                post=post,
-            )
+                create_notification(
+                    user_id=post.user_id,
+                    type="comment",
+                    message="회원님의 게시글에 새로운 댓글이 달렸어요.",
+                    relate_url=f"/posts/{post.post_id}#comment-{c.comment_id}",
+                    post=post,
+                    database="default",
+                    source="stagelog.core",
+                )
         except Exception:
             pass
     # 댓글 작성 exp 반영 (실패해도 댓글 작성은 성공하도록)
@@ -606,6 +608,8 @@ def _toggle_reaction(request, post_id: int, target_type: str):
                     message=noti_msg,
                     relate_url=f"/posts/{post_obj.post_id}",
                     post=post_obj,
+                    database="default",
+                    source="stagelog.core",
                 )
             except Exception:
                 pass

@@ -75,7 +75,9 @@ def apply_user_exp(user: User, type: ExpPolicy):
             user_id=user.user_id,
             type="notice",
             message=f"레벨이 {user.level} 로 올랐습니다!",
-            relate_url="/api/users/me"
+            relate_url="/api/users/me",
+            database="auth_db",
+            source="stagelog.auth",
         )
 
     return {

@@ -27,6 +27,8 @@ def create_notification(
     relate_url: Optional[str] = None,
     post: Optional[Post] = None,
     event: Optional[Event] = None,
+    database: str = "default",
+    source: Optional[str] = None,
 ):
     """
     알림 엔티티를 직접 저장하지 않고 outbox 이벤트를 적재한다.
@@ -37,7 +39,7 @@ def create_notification(
         payload = {
             "event_id": str(uuid4()),
             "schema_version": "v1",
-            "source": "stagelog.core",
+            "source": source or "stagelog.core",
             "detail_type": _to_detail_type(type),
             "occurred_at": now.isoformat(),
             "recipient_user_id": user_id,
@@ -48,7 +50,7 @@ def create_notification(
             "related_event_id": getattr(event, "event_id", None),
         }
 
-        OutboxEvent.objects.create(
+        OutboxEvent.objects.using(database).create(
             aggregate_type="notification",
             aggregate_id=str(user_id),
             event_type=_to_detail_type(type),

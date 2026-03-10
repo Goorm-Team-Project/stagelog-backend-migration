@@ -186,6 +186,7 @@ OUTBOX_NOTIFICATION_AGGREGATE_TYPE = env(
     "OUTBOX_NOTIFICATION_AGGREGATE_TYPE",
     default="notification",
 )
+OUTBOX_DATABASES = env.list("OUTBOX_DATABASES", default=["default", "auth_db", "events_db"])
 
 # 14. Redis (ElastiCache)
 REDIS_HOST = env("REDIS_HOST", default="")
