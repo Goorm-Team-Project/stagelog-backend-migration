@@ -2,11 +2,43 @@
 
 from django.views.decorators.http import require_http_methods, require_safe
 from apps.common.utils import common_response, login_check
+from common.services import internal_api
 from events.models import Event
 from bookmarks.models import Bookmark
 from django.views.decorators.csrf import csrf_exempt
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count
+
+
+def _event_exists(event_id: int) -> bool:
+    try:
+        return internal_api.event_exists(event_id)
+    except Exception:
+        return Event.objects.filter(event_id=event_id).exists()
+
+
+def _get_events_batch(event_ids):
+    try:
+        return internal_api.get_events_batch(event_ids)
+    except Exception:
+        rows = Event.objects.filter(event_id__in=list(event_ids)).values(
+            "event_id",
+            "title",
+            "artist",
+            "start_date",
+            "end_date",
+            "venue",
+            "poster",
+        )
+        return {row["event_id"]: row for row in rows}
+
+
+def _event_start_date_sort_key(event_row):
+    value = event_row.get("start_date")
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return value or ""
+
 
 @csrf_exempt
 @require_http_methods(["POST"]) # POST만 허용
@@ -16,7 +48,7 @@ def toggle_bookmark(request, event_id):
         user_id = request.user_id
 
         # 공연 존재 여부는 events 서비스 DB에서 확인
-        if not Event.objects.filter(event_id=event_id).exists():
+        if not _event_exists(event_id):
             return common_response(False, message="존재하지 않는 공연입니다.", status=404)
 
         # 2. 토글 로직 (있으면 삭제, 없으면 생성)
@@ -45,7 +77,9 @@ def mypage(request):
                                         .values_list('event_id', flat=True)
 
         my_booked_ids = list(my_booked_ids)
-        qs = Event.objects.filter(event_id__in=my_booked_ids).order_by('-start_date')
+        event_map = _get_events_batch(my_booked_ids)
+        ordered_events = [event_map[eid] for eid in my_booked_ids if eid in event_map]
+        ordered_events.sort(key=_event_start_date_sort_key, reverse=True)
 
         favorite_rows = (
             Bookmark.objects.filter(event_id__in=my_booked_ids)
@@ -54,7 +88,7 @@ def mypage(request):
         )
         favorite_count_map = {row["event_id"]: row["favorite_count"] for row in favorite_rows}
 
-        paginator = Paginator(qs, page_size)
+        paginator = Paginator(ordered_events, page_size)
 
         try:
             current_page_data = paginator.page(page)
@@ -63,15 +97,23 @@ def mypage(request):
 
         event_list = []
         for event in current_page_data:
+            event_id = event["event_id"] if isinstance(event, dict) else event.event_id
+            title = event["title"] if isinstance(event, dict) else event.title
+            artist = event.get("artist") if isinstance(event, dict) else (event.artist if hasattr(event, 'artist') else "")
+            start_date = event.get("start_date") if isinstance(event, dict) else event.start_date
+            end_date = event.get("end_date") if isinstance(event, dict) else event.end_date
+            venue = event.get("venue") if isinstance(event, dict) else event.venue
+            poster = event.get("poster") if isinstance(event, dict) else event.poster
+
             event_list.append({
-                "event_id": event.event_id, 
-                "title": event.title,
-                "artist": event.artist if hasattr(event, 'artist') else "",
-                "start_date": event.start_date.strftime('%Y-%m-%d') if event.start_date else None,
-                "end_date": event.end_date.strftime('%Y-%m-%d') if event.end_date else None,
-                "venue": event.venue,
-                "poster": event.poster if event.poster else None,
-                "favorite_count": favorite_count_map.get(event.event_id, 0),
+                "event_id": event_id,
+                "title": title,
+                "artist": artist or "",
+                "start_date": start_date.strftime('%Y-%m-%d') if hasattr(start_date, "strftime") and start_date else start_date,
+                "end_date": end_date.strftime('%Y-%m-%d') if hasattr(end_date, "strftime") and end_date else end_date,
+                "venue": venue,
+                "poster": poster if poster else None,
+                "favorite_count": favorite_count_map.get(event_id, 0),
             })
 
         return common_response(

@@ -136,6 +136,12 @@ CORS_ALLOW_ALL_ORIGINS = DEBUG
 if not DEBUG:
     CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
 
+# 8-1. Internal API routing (service-to-service)
+USE_INTERNAL_SERVICE_API = env.bool("USE_INTERNAL_SERVICE_API", default=False)
+AUTH_INTERNAL_BASE_URL = env("AUTH_INTERNAL_BASE_URL", default="")
+EVENTS_INTERNAL_BASE_URL = env("EVENTS_INTERNAL_BASE_URL", default="")
+CORE_INTERNAL_BASE_URL = env("CORE_INTERNAL_BASE_URL", default="")
+
 # 9. JWT 설정 (수동 구현용 변수)
 # Auth service로 이동하여 현재 API에서는 직접 사용하지 않음(참고용 유지)
 # SimpleJWT 설정은 제거하고, 직접 구현 시 사용할 알고리즘/만료시간만 환경변수나 상수로 관리 추천

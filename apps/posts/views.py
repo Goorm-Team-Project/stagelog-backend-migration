@@ -7,9 +7,9 @@ from django.views.decorators.csrf import csrf_exempt
 from django.db import transaction, IntegrityError
 
 from common.utils import common_response, login_check, get_optional_user_id
+from common.services import internal_api
 from notifications.services import create_notification
 from django.contrib.auth import get_user_model
-from users.services import apply_user_exp, ExpPolicy
 from events.models import Event
 
 User = get_user_model()
@@ -49,15 +49,59 @@ def _truncate_250(text: str) -> str:
 def _get_user_nickname_map(user_ids) -> dict:
     if not user_ids:
         return {}
-    rows = User.objects.filter(user_id__in=list(user_ids)).values("user_id", "nickname")
-    return {row["user_id"]: row["nickname"] for row in rows}
+    try:
+        return internal_api.get_users_batch(user_ids)
+    except Exception:
+        rows = User.objects.filter(user_id__in=list(user_ids)).values("user_id", "nickname")
+        return {row["user_id"]: row["nickname"] for row in rows}
 
 
 def _get_event_map(event_ids) -> dict:
     if not event_ids:
         return {}
-    rows = Event.objects.filter(event_id__in=list(event_ids)).values("event_id", "title", "poster")
-    return {row["event_id"]: row for row in rows}
+    try:
+        return internal_api.get_events_batch(event_ids)
+    except Exception:
+        rows = Event.objects.filter(event_id__in=list(event_ids)).values("event_id", "title", "poster")
+        return {row["event_id"]: row for row in rows}
+
+
+def _event_exists(event_id: int) -> bool:
+    try:
+        return internal_api.event_exists(event_id)
+    except Exception:
+        return Event.objects.filter(event_id=event_id).exists()
+
+
+def _event_summary_or_none(event_id: int):
+    try:
+        data = internal_api.get_event_summary(event_id)
+        if data:
+            return data
+    except Exception:
+        pass
+
+    try:
+        ev = Event.objects.get(event_id=event_id)
+    except Event.DoesNotExist:
+        return None
+
+    return {
+        "event_id": ev.event_id,
+        "title": ev.title,
+        "poster": ev.poster,
+        "artist": ev.artist,
+        "start_date": ev.start_date.isoformat() if ev.start_date else None,
+        "end_date": ev.end_date.isoformat() if ev.end_date else None,
+        "group_name": ev.group_name,
+    }
+
+
+def _apply_user_exp_or_none(user_id: int, policy: str):
+    try:
+        return internal_api.apply_user_exp(user_id, policy)
+    except Exception:
+        return None
 
 
 def _post_summary(p: Post, nickname: str = None) -> dict:
@@ -170,21 +214,9 @@ def event_posts_list(request, event_id: int):
         return event_posts_create(request, event_id)
 
     # GET: 공연 존재 확인 + 상단 공연 메타 구성(게시글 0개여도 반환)
-    try:
-        ev = Event.objects.get(event_id=event_id)
-    except Event.DoesNotExist:
+    event_meta = _event_summary_or_none(event_id)
+    if event_meta is None:
         return common_response(False, message="존재하지 않는 공연입니다.", status=404)
-
-    event_meta = {
-        "event_id": ev.event_id,
-        "title": ev.title,
-        "poster": ev.poster,
-        "artist": ev.artist,
-        "start_date": ev.start_date.isoformat() if ev.start_date else None,
-        "end_date": ev.end_date.isoformat() if ev.end_date else None,
-
-        "group_name": ev.group_name,
-    }
 
     category = normalize_category(request.GET.get("category"))
     search = (request.GET.get("search") or "").strip()
@@ -235,7 +267,7 @@ def event_posts_list(request, event_id: int):
 @require_POST
 def event_posts_create(request, event_id: int):
     # 공연 존재 확인
-    if not Event.objects.filter(event_id=event_id).exists():
+    if not _event_exists(event_id):
         return common_response(False,message="존재하지 않는 공연입니다.", status=404)
 
     data= _parse_json(request)
@@ -263,12 +295,7 @@ def event_posts_create(request, event_id: int):
     )
 
     # 게시글 작성 exp 반영 (실패해도, 작성은 성공되도록)
-    exp_result = None
-    try:
-        u = User.objects.get(user_id=request.user_id)
-        exp_result = apply_user_exp(u, ExpPolicy.POST)
-    except Exception:
-        exp_result = None
+    exp_result = _apply_user_exp_or_none(request.user_id, "POST")
 
     p = Post.objects.get(post_id=p.post_id)
     user_map = _get_user_nickname_map({p.user_id})
@@ -449,12 +476,7 @@ def comment_create(request, post_id: int):
         except Exception:
             pass
     # 댓글 작성 exp 반영 (실패해도 댓글 작성은 성공하도록)
-    exp_result = None
-    try:
-        u = User.objects.get(user_id=request.user_id)
-        exp_result = apply_user_exp(u, ExpPolicy.COMMENT)
-    except Exception:
-        exp_result = None
+    exp_result = _apply_user_exp_or_none(request.user_id, "COMMENT")
 
     user_map = _get_user_nickname_map({c.user_id})
     resp = _comment_item(c, nickname=user_map.get(c.user_id))
