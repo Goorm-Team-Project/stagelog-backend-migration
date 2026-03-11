@@ -107,37 +107,13 @@ def login_check(func):
     """
     @functools.wraps(func)
     def wrapper(request, *args, **kwargs):
-        trust_gateway = bool(getattr(settings, "TRUST_API_GATEWAY_AUTH", False))
+        user_id, error = _auth_from_gateway(request)
+        if error:
+            return common_response(success=False, message=error, status=401)
+        if user_id is None:
+            return common_response(success=False, message="인증 정보가 없습니다.", status=401)
 
-        if trust_gateway:
-            user_id, error = _auth_from_gateway(request)
-            if error:
-                return common_response(success=False, message=error, status=401)
-            if user_id is None:
-                return common_response(success=False, message="인증 정보가 없습니다.", status=401)
-
-            request.user_id = user_id
-            return func(request, *args, **kwargs)
-
-        # legacy fallback: backend JWT 직접 검증
-        # 헤더에서 Authorization 가져오기
-        auth_header = request.headers.get('Authorization')
-
-        if not auth_header or not auth_header.startswith('Bearer '):
-            return common_response(success=False, message="토큰이 없거나 형식이 잘못되었습니다.", status=401)
-        
-        # 'Bearer' 떼기
-        token = auth_header.split(' ')[1]
-
-        # 토큰 검증
-        payload = validate_token(token)
-
-        if payload is None:
-            return common_response(success=False, message="유효하지 않거나 만료된 토큰입니다.", status=401)
-
-        # 검증 통과. request에 user_id넣기
-        request.user_id = payload['user_id']
-
+        request.user_id = user_id
         return func(request, *args, **kwargs)
     
     return wrapper
@@ -145,34 +121,14 @@ def login_check(func):
 # Optional Auth 헬퍼 추가
 def get_optional_user_id(request):
     """
-    Optional Auth:
-    - TRUST_API_GATEWAY_AUTH=True: 게이트웨이 user id 헤더 기준
-    - False: 기존 Authorization Bearer 토큰 기준
+    Optional Auth (API Gateway 헤더 기반):
+    - 헤더가 없으면 (None, None)
+    - 헤더가 유효하면 (user_id, None)
+    - 헤더가 잘못되면 (None, error)
     """
-    trust_gateway = bool(getattr(settings, "TRUST_API_GATEWAY_AUTH", False))
-    if trust_gateway:
-        user_id, error = _auth_from_gateway(request)
-        if error:
-            return None, error
-        return user_id, None
-
-    # legacy fallback: backend JWT 직접 검증
-    auth = request.headers.get("Authorization")
-    if not auth:
-        return None, None
-
-    if not auth.startswith("Bearer "):
-        return None, "토큰 형식이 잘못되었습니다. (Bearer 토큰)"
-
-    token = auth.split(" ", 1)[1].strip()
-    decoded = validate_token(token)
-    if decoded is None:
-        return None, "유효하지 않거나 만료된 토큰입니다."
-
-    user_id = decoded.get("user_id")
-    if not user_id:
-        return None, "토큰에 user_id가 없습니다."
-
+    user_id, error = _auth_from_gateway(request)
+    if error:
+        return None, error
     return user_id, None
 
 

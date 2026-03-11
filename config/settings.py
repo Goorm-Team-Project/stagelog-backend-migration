@@ -143,7 +143,6 @@ EVENTS_INTERNAL_BASE_URL = env("EVENTS_INTERNAL_BASE_URL", default="")
 CORE_INTERNAL_BASE_URL = env("CORE_INTERNAL_BASE_URL", default="")
 
 # 8-2. API Gateway auth handoff
-TRUST_API_GATEWAY_AUTH = env.bool("TRUST_API_GATEWAY_AUTH", default=False)
 GATEWAY_USER_ID_HEADER = env("GATEWAY_USER_ID_HEADER", default="X-User-Id")
 
 # 9. JWT 설정 (수동 구현용 변수)
