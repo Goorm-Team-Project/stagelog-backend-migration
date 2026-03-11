@@ -78,11 +78,48 @@ def validate_token(token):
     except jwt.InvalidTokenError:
         return None  # 위변조되거나 잘못된 토큰
 
+
+def _auth_from_gateway(request):
+    """
+    API Gateway(Authorizer)에서 주입한 user id 헤더를 읽는다.
+    - 헤더가 없으면 (None, None)
+    - 헤더가 있지만 정수가 아니면 (None, error)
+    - 유효하면 (user_id, None)
+    """
+    header_name = getattr(settings, "GATEWAY_USER_ID_HEADER", "X-User-Id")
+    raw = request.headers.get(header_name)
+    if raw is None:
+        return None, None
+
+    value = str(raw).strip()
+    if not value:
+        return None, "인증 사용자 정보가 비어 있습니다."
+
+    try:
+        return int(value), None
+    except (TypeError, ValueError):
+        return None, "인증 사용자 정보 형식이 잘못되었습니다."
+
+
 def login_check(func):
     """
     API 뷰에 사용할 데코레이터
     """
+    @functools.wraps(func)
     def wrapper(request, *args, **kwargs):
+        trust_gateway = bool(getattr(settings, "TRUST_API_GATEWAY_AUTH", False))
+
+        if trust_gateway:
+            user_id, error = _auth_from_gateway(request)
+            if error:
+                return common_response(success=False, message=error, status=401)
+            if user_id is None:
+                return common_response(success=False, message="인증 정보가 없습니다.", status=401)
+
+            request.user_id = user_id
+            return func(request, *args, **kwargs)
+
+        # legacy fallback: backend JWT 직접 검증
         # 헤더에서 Authorization 가져오기
         auth_header = request.headers.get('Authorization')
 
@@ -108,11 +145,18 @@ def login_check(func):
 # Optional Auth 헬퍼 추가
 def get_optional_user_id(request):
     """
-    Authorization 헤더가 없으면 (None, None) 반환 -> Public 유지
-    Authorization 헤더가 있으면 토큰 검증:
-      - 유효: (user_id, None)
-      - 무효/형식오류: (None, error_msg)  -> 호출부에서 401 처리
+    Optional Auth:
+    - TRUST_API_GATEWAY_AUTH=True: 게이트웨이 user id 헤더 기준
+    - False: 기존 Authorization Bearer 토큰 기준
     """
+    trust_gateway = bool(getattr(settings, "TRUST_API_GATEWAY_AUTH", False))
+    if trust_gateway:
+        user_id, error = _auth_from_gateway(request)
+        if error:
+            return None, error
+        return user_id, None
+
+    # legacy fallback: backend JWT 직접 검증
     auth = request.headers.get("Authorization")
     if not auth:
         return None, None

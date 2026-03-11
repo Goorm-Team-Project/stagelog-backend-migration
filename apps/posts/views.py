@@ -313,16 +313,10 @@ def post_detail(request, post_id: int):
     if request.method == "DELETE":
         return post_delete(request, post_id)
 
-    # GET: Public + Optional Auth
-    auth_header = request.headers.get("Authorization")
-    user_id = None
-
-    if auth_header:
-        user_id, auth_error = get_optional_user_id(request)
-        if auth_error:
-            return common_response(False, message=auth_error, status=401)
-        if user_id is None:
-            return common_response(False, message="토큰에 user_id가 없습니다.", status=401)
+    # GET: Public + Optional Auth (API Gateway user header or legacy token)
+    user_id, auth_error = get_optional_user_id(request)
+    if auth_error:
+        return common_response(False, message=auth_error, status=401)
 
     # 조회수 +1 (동시성 안전)
     updated = Post.objects.filter(post_id=post_id).update(views=F("views") + 1)
@@ -333,8 +327,8 @@ def post_detail(request, post_id: int):
     user_map = _get_user_nickname_map({p.user_id})
     detail = _post_detail(p, nickname=user_map.get(p.user_id))
 
-    # Authorization이 있을 때만 my_reaction 추가
-    if auth_header:
+    # 로그인 사용자일 때만 my_reaction 추가
+    if user_id is not None:
         r = PostReaction.objects.filter(post_id=post_id, user_id=user_id).first()
         if r is None:
             detail["my_reaction"] = None
