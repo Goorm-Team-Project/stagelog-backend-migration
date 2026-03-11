@@ -19,7 +19,9 @@ from django.urls import path, include
 
 from events import views as events_views
 from posts import views as posts_views
+from bookmarks import views as bookmarks_views
 from uploads import views as uploads_views
+from users import views as users_views
 from common.utils import health_check
 
 urlpatterns = [
@@ -30,6 +32,18 @@ urlpatterns = [
     # NOTE: auth service 분리로 인해 다음 라우트는 임시 제거 대상
     # path('api/auth/', include('users.urls')),
     path('api/users/', include('users.urls')),
+
+    # Internal APIs (service-to-service)
+    path("internal/users:batch-get", users_views.internal_users_batch_get, name="internal_users_batch_get"),
+    path("internal/users/<int:user_id>/exp", users_views.internal_apply_user_exp, name="internal_apply_user_exp"),
+    path("internal/events/<int:event_id>/exists", events_views.internal_event_exists, name="internal_event_exists"),
+    path("internal/events/<int:event_id>/summary", events_views.internal_event_summary, name="internal_event_summary"),
+    path("internal/events:batch-summary", events_views.internal_events_batch_summary, name="internal_events_batch_summary"),
+    path(
+        "internal/bookmarks/events:favorite-count",
+        bookmarks_views.internal_bookmark_favorite_count,
+        name="internal_bookmark_favorite_count",
+    ),
 
     # Bookmarks 라우팅
     path('api/bookmarks/', include('bookmarks.urls')),

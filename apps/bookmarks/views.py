@@ -1,11 +1,14 @@
 # apps/bookmarks/views.py
 
+import json
+
 from django.views.decorators.http import require_http_methods, require_safe
 from apps.common.utils import common_response, login_check
 from common.services import internal_api
 from events.models import Event
 from bookmarks.models import Bookmark
 from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
 from django.core.paginator import Paginator, EmptyPage
 from django.db.models import Count
 
@@ -38,6 +41,51 @@ def _event_start_date_sort_key(event_row):
     if hasattr(value, "isoformat"):
         return value.isoformat()
     return value or ""
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def internal_bookmark_favorite_count(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "invalid json"}, status=400)
+
+    raw_event_ids = payload.get("event_ids")
+    if not isinstance(raw_event_ids, list):
+        return JsonResponse({"message": "event_ids must be list"}, status=400)
+
+    normalized_event_ids = []
+    for raw in raw_event_ids:
+        try:
+            normalized_event_ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not normalized_event_ids:
+        return JsonResponse({"counts": []}, status=200)
+
+    favorite_rows = (
+        Bookmark.objects.filter(event_id__in=normalized_event_ids)
+        .values("event_id")
+        .annotate(favorite_count=Count("event_id"))
+    )
+    favorite_count_map = {int(row["event_id"]): int(row["favorite_count"]) for row in favorite_rows}
+
+    counts = []
+    seen = set()
+    for event_id in normalized_event_ids:
+        if event_id in seen:
+            continue
+        seen.add(event_id)
+        counts.append(
+            {
+                "event_id": int(event_id),
+                "favorite_count": favorite_count_map.get(int(event_id), 0),
+            }
+        )
+
+    return JsonResponse({"counts": counts}, status=200)
 
 
 @csrf_exempt

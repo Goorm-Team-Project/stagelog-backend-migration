@@ -20,6 +20,80 @@ from django.http import HttpResponse, JsonResponse
 
 User = get_user_model()
 
+
+@csrf_exempt
+@require_POST
+def internal_users_batch_get(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "invalid json"}, status=400)
+
+    raw_user_ids = payload.get("user_ids")
+    if not isinstance(raw_user_ids, list):
+        return JsonResponse({"message": "user_ids must be list"}, status=400)
+
+    normalized_user_ids = []
+    for raw in raw_user_ids:
+        try:
+            normalized_user_ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not normalized_user_ids:
+        return JsonResponse({"users": []}, status=200)
+
+    rows = User.objects.filter(user_id__in=normalized_user_ids).values("user_id", "nickname")
+    rows_by_user_id = {int(row["user_id"]): row for row in rows}
+
+    users = []
+    seen = set()
+    for user_id in normalized_user_ids:
+        if user_id in seen:
+            continue
+        seen.add(user_id)
+        row = rows_by_user_id.get(user_id)
+        if not row:
+            continue
+        users.append(
+            {
+                "user_id": int(row["user_id"]),
+                "nickname": row.get("nickname"),
+            }
+        )
+
+    return JsonResponse({"users": users}, status=200)
+
+
+@csrf_exempt
+@require_POST
+def internal_apply_user_exp(request, user_id):
+    from users.services import ExpPolicy, apply_user_exp
+
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "invalid json"}, status=400)
+
+    policy = str(payload.get("policy") or "").strip().upper()
+    policy_map = {
+        "POST": ExpPolicy.POST,
+        "COMMENT": ExpPolicy.COMMENT,
+    }
+    exp_policy = policy_map.get(policy)
+    if exp_policy is None:
+        return JsonResponse({"message": "invalid policy"}, status=400)
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        return JsonResponse({"message": "user not found"}, status=404)
+
+    result = apply_user_exp(user, exp_policy)
+    result["user_id"] = int(user_id)
+    result["policy"] = policy
+    return JsonResponse(result, status=200)
+
 # @require_safe 
 # def kakao_test_page(request):
 #     client_id = settings.KAKAO_REST_API_KEY

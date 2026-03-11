@@ -1,6 +1,10 @@
+import json
+
 from django.core.paginator import Paginator
 from django.db.models import Q
-from django.views.decorators.http import require_GET
+from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.http import JsonResponse
 
 from common.utils import common_response
 from common.services import internal_api
@@ -57,6 +61,71 @@ def _favorite_count_map(event_ids):
     except Exception:
         # Internal API 전환 전/장애 시 favorite_count는 0으로 degrade
         return {int(event_id): 0 for event_id in event_ids}
+
+
+def _event_internal_summary(e: Event) -> dict:
+    return {
+        "event_id": int(e.event_id),
+        "title": e.title,
+        "poster": e.poster,
+        "artist": e.artist,
+        "start_date": e.start_date.isoformat() if e.start_date else None,
+        "end_date": e.end_date.isoformat() if e.end_date else None,
+        "group_name": e.group_name,
+    }
+
+
+@require_GET
+def internal_event_exists(request, event_id: int):
+    return JsonResponse({"exists": Event.objects.filter(event_id=event_id).exists()}, status=200)
+
+
+@require_GET
+def internal_event_summary(request, event_id: int):
+    try:
+        event = Event.objects.get(event_id=event_id)
+    except Event.DoesNotExist:
+        return JsonResponse({"message": "event not found"}, status=404)
+    return JsonResponse(_event_internal_summary(event), status=200)
+
+
+@csrf_exempt
+@require_POST
+def internal_events_batch_summary(request):
+    try:
+        payload = json.loads(request.body or "{}")
+    except json.JSONDecodeError:
+        return JsonResponse({"message": "invalid json"}, status=400)
+
+    raw_event_ids = payload.get("event_ids")
+    if not isinstance(raw_event_ids, list):
+        return JsonResponse({"message": "event_ids must be list"}, status=400)
+
+    normalized_event_ids = []
+    for raw in raw_event_ids:
+        try:
+            normalized_event_ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+
+    if not normalized_event_ids:
+        return JsonResponse({"events": []}, status=200)
+
+    rows = Event.objects.filter(event_id__in=normalized_event_ids)
+    rows_by_event_id = {int(row.event_id): row for row in rows}
+
+    events = []
+    seen = set()
+    for event_id in normalized_event_ids:
+        if event_id in seen:
+            continue
+        seen.add(event_id)
+        row = rows_by_event_id.get(event_id)
+        if not row:
+            continue
+        events.append(_event_internal_summary(row))
+
+    return JsonResponse({"events": events}, status=200)
 
 
 @require_GET
