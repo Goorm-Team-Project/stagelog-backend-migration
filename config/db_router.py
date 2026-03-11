@@ -4,12 +4,12 @@ from django.conf import settings
 class ServiceDbRouter:
     """
     App label 기준으로 DB alias를 분기한다.
-    - auth schema: users + django auth 계열
+    - auth schema: users/bookmarks + django auth 계열
     - events schema: events
     - core schema(default): 그 외 앱
     """
 
-    AUTH_APP_LABELS = {"users", "auth", "admin", "contenttypes"}
+    AUTH_APP_LABELS = {"users", "bookmarks", "auth", "admin", "contenttypes"}
     EVENTS_APP_LABELS = {"events"}
     SHARED_APP_LABELS = {"common"}
 
