@@ -77,6 +77,12 @@ if db_mode == 'sqlite':
         }
     }
 else:    
+    db_ssl_ca = env("DB_SSL_CA", default="/etc/ssl/certs/ca-certificates.crt")
+    db_use_ssl = env.bool("DB_USE_SSL", default=True)
+    mysql_options = {"charset": "utf8mb4"}
+    if db_use_ssl:
+        mysql_options["ssl"] = {"ca": db_ssl_ca}
+
     DATABASES = {
         "default": {  # 일단 core를 default로 두는 걸 권장
             "ENGINE": "django.db.backends.mysql",
@@ -85,7 +91,7 @@ else:
             "PASSWORD": os.environ["DB_PASSWORD_CORE"],
             "HOST": os.environ["DB_HOST"],
             "PORT": "3306",
-            "OPTIONS": {"charset": "utf8mb4"},
+            "OPTIONS": mysql_options.copy(),
         },
         "auth_db": {
             "ENGINE": "django.db.backends.mysql",
@@ -94,7 +100,7 @@ else:
             "PASSWORD": os.environ["DB_PASSWORD_AUTH"],
             "HOST": os.environ["DB_HOST"],
             "PORT": "3306",
-            "OPTIONS": {"charset": "utf8mb4"},
+            "OPTIONS": mysql_options.copy(),
         },
         "events_db": {
             "ENGINE": "django.db.backends.mysql",
@@ -103,7 +109,7 @@ else:
             "PASSWORD": os.environ["DB_PASSWORD_EVENTS"],
             "HOST": os.environ["DB_HOST"],
             "PORT": "3306",
-            "OPTIONS": {"charset": "utf8mb4"},
+            "OPTIONS": mysql_options.copy(),
         },
     }
     DATABASE_ROUTERS = ['config.db_router.ServiceDbRouter']

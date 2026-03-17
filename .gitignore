@@ -18,3 +18,5 @@ certs/
 
 # docker compose for local
 docker-compose.override.yml
+
+certs/*
