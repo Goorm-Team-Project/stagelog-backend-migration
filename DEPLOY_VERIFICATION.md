@@ -7,6 +7,7 @@
 
 ## 2) Outbox Worker
 - worker/apply:
+  - `kubectl apply -f deploy/k8s/stagelog-backend-env-externalsecret.yaml`
   - `kubectl apply -f deploy/k8s/outbox-worker-deployment.yaml`
 - 상태 확인:
   - `kubectl get deploy,pods | rg outbox-worker`

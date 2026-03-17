@@ -25,6 +25,11 @@ spec:
         args:
         - |
           set -eu
+          if [ -f /app/.env ]; then
+            set -a
+            . /app/.env
+            set +a
+          fi
           while true; do
             python manage.py consume_notification_queue \
               --queue-url="${NOTIFICATION_SQS_QUEUE_URL}" \
@@ -35,10 +40,11 @@ spec:
         env:
         - name: DJANGO_SETTINGS_MODULE
           value: config.settings
-        # 기존 백엔드 배포와 동일한 Secret 사용
-        envFrom:
-        - secretRef:
-            name: stagelog-backend-env
+        volumeMounts:
+        - name: backend-env-file
+          mountPath: /app/.env
+          subPath: .env
+          readOnly: true
         resources:
           requests:
             cpu: 100m
@@ -46,3 +52,10 @@ spec:
           limits:
             cpu: 400m
             memory: 512Mi
+      volumes:
+      - name: backend-env-file
+        secret:
+          secretName: stagelog-backend-env
+          items:
+          - key: .env
+            path: .env

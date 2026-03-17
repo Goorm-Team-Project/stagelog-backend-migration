@@ -12,14 +12,16 @@
   - `python manage.py migrate --database=events_db`
 
 - [ ] EKS 구성 후 Outbox Worker Deployment 적용
-  - `deploy/k8s/outbox-worker-deployment.yaml`의 `image`, `serviceAccountName`, `secretRef` 실제 값으로 치환
+  - `deploy/k8s/outbox-worker-deployment.yaml`의 `image`, `serviceAccountName`, `.env` 시크릿 마운트(`stagelog-backend-env`) 확인
+  - `deploy/k8s/stagelog-backend-env-externalsecret.yaml`의 SSM 경로(`/stagelog/backend/.env`) 확인 후 적용
   - `OUTBOX_DATABASES=default,auth_db,events_db` 주입 확인
   - 워커 ServiceAccount에 EventBridge `events:PutEvents` 권한(IRSA/Role) 연결
+  - `kubectl apply -f deploy/k8s/stagelog-backend-env-externalsecret.yaml`
   - `kubectl apply -f deploy/k8s/outbox-worker-deployment.yaml`
   - 워커 로그/상태 확인 (`kubectl logs`, `kubectl get pods`)으로 outbox 발행 검증
 
 - [ ] Notification Consumer(SQS -> DynamoDB) 배포
-  - `deploy/k8s/notification-consumer-deployment.yaml`의 `image`, `serviceAccountName`, `secretRef` 실제 값으로 치환
+  - `deploy/k8s/notification-consumer-deployment.yaml`의 `image`, `serviceAccountName` 실제 값으로 치환
   - `deploy/k8s/notification-consumer-scaledobject.yaml`의 `queueURL` 실제 값으로 치환
   - 워커 ServiceAccount에 SQS(`ReceiveMessage`,`DeleteMessage`,`GetQueueAttributes`) + DynamoDB(`PutItem`) 권한(IRSA/Role) 연결
   - `REDIS_HOST`, `REDIS_PORT`, `REDIS_DB`, `REDIS_PASSWORD`, `REDIS_SSL` 시크릿 반영
