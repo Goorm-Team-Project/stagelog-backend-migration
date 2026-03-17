@@ -138,10 +138,11 @@ STATIC_URL = 'static/'
 APPEND_SLASH = False
 
 # 8. CORS 설정
-CORS_ALLOW_ALL_ORIGINS = DEBUG
-if not DEBUG:
-    CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
-
+CORS_ALLOWED_ORIGINS = env.list('CORS_ALLOWED_ORIGINS', default=[])
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = [
+    "https://pearlinvest.click",
+]
 # 8-1. Internal API routing (service-to-service)
 USE_INTERNAL_SERVICE_API = env.bool("USE_INTERNAL_SERVICE_API", default=False)
 AUTH_INTERNAL_BASE_URL = env("AUTH_INTERNAL_BASE_URL", default="")
