@@ -5,7 +5,6 @@ import json
 from django.views.decorators.http import require_http_methods, require_safe
 from apps.common.utils import common_response, login_check
 from common.services import internal_api
-from events.models import Event
 from bookmarks.models import Bookmark
 from django.views.decorators.csrf import csrf_exempt
 from django.http import JsonResponse
@@ -14,26 +13,11 @@ from django.db.models import Count
 
 
 def _event_exists(event_id: int) -> bool:
-    try:
-        return internal_api.event_exists(event_id)
-    except Exception:
-        return Event.objects.filter(event_id=event_id).exists()
+    return internal_api.event_exists(event_id)
 
 
 def _get_events_batch(event_ids):
-    try:
-        return internal_api.get_events_batch(event_ids)
-    except Exception:
-        rows = Event.objects.filter(event_id__in=list(event_ids)).values(
-            "event_id",
-            "title",
-            "artist",
-            "start_date",
-            "end_date",
-            "venue",
-            "poster",
-        )
-        return {row["event_id"]: row for row in rows}
+    return internal_api.get_events_batch(event_ids)
 
 
 def _event_start_date_sort_key(event_row):
@@ -109,6 +93,8 @@ def toggle_bookmark(request, event_id):
             Bookmark.objects.create(user_id=user_id, event_id=event_id)
             return common_response(True, message="북마크 성공!", data={"state": "on"}, status=201)
 
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     except Exception as e:
         print(f"Bookmark Error: {e}")
         return common_response(False, message="서버 에러 발생", status=500)
@@ -176,6 +162,8 @@ def mypage(request):
             status=200
         )
         
+    except internal_api.InternalApiError:
+        return common_response(success=False, message="내부 API 호출 실패", status=502)
     except Exception as e:
         print(f"[ERROR] mypage: {e}") 
         return common_response(success=False, message="서버 에러", status=500)

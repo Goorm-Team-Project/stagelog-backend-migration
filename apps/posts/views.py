@@ -9,10 +9,6 @@ from django.db import transaction, IntegrityError
 from common.utils import common_response, login_check, get_optional_user_id
 from common.services import internal_api
 from notifications.services import create_notification
-from django.contrib.auth import get_user_model
-from events.models import Event
-
-User = get_user_model()
 from .models import Post, Comment, PostReaction, Report, ReactionType
 
 # Create your views here.
@@ -49,59 +45,32 @@ def _truncate_250(text: str) -> str:
 def _get_user_nickname_map(user_ids) -> dict:
     if not user_ids:
         return {}
-    try:
-        return internal_api.get_users_batch(user_ids)
-    except Exception:
-        rows = User.objects.filter(user_id__in=list(user_ids)).values("user_id", "nickname")
-        return {row["user_id"]: row["nickname"] for row in rows}
+    return internal_api.get_users_batch(user_ids)
 
 
 def _get_event_map(event_ids) -> dict:
     if not event_ids:
         return {}
-    try:
-        return internal_api.get_events_batch(event_ids)
-    except Exception:
-        rows = Event.objects.filter(event_id__in=list(event_ids)).values("event_id", "title", "poster")
-        return {row["event_id"]: row for row in rows}
+    return internal_api.get_events_batch(event_ids)
 
 
 def _event_exists(event_id: int) -> bool:
-    try:
-        return internal_api.event_exists(event_id)
-    except Exception:
-        return Event.objects.filter(event_id=event_id).exists()
+    return internal_api.event_exists(event_id)
 
 
 def _event_summary_or_none(event_id: int):
     try:
         data = internal_api.get_event_summary(event_id)
-        if data:
-            return data
-    except Exception:
-        pass
-
-    try:
-        ev = Event.objects.get(event_id=event_id)
-    except Event.DoesNotExist:
-        return None
-
-    return {
-        "event_id": ev.event_id,
-        "title": ev.title,
-        "poster": ev.poster,
-        "artist": ev.artist,
-        "start_date": ev.start_date.isoformat() if ev.start_date else None,
-        "end_date": ev.end_date.isoformat() if ev.end_date else None,
-        "group_name": ev.group_name,
-    }
+        return data or None
+    except internal_api.InternalApiError as exc:
+        # internal summary API에서 404를 내려주면 "존재하지 않는 공연"으로 처리
+        if str(exc).startswith("404:"):
+            return None
+        raise
 
 
 def _apply_user_exp_or_none(user_id: int, policy: str):
-    try:
-        return internal_api.apply_user_exp(user_id, policy)
-    except Exception:
-        return None
+    return internal_api.apply_user_exp(user_id, policy)
 
 
 def _post_summary(p: Post, nickname: str = None) -> dict:
@@ -174,8 +143,11 @@ def posts_list(request):
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
     page_posts = list(page_obj.object_list)
-    user_map = _get_user_nickname_map({p.user_id for p in page_posts})
-    event_map = _get_event_map({p.event_id for p in page_posts})
+    try:
+        user_map = _get_user_nickname_map({p.user_id for p in page_posts})
+        event_map = _get_event_map({p.event_id for p in page_posts})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
 
     posts = []
     for p in page_posts:
@@ -210,7 +182,10 @@ def posts_list(request):
 @require_GET
 def event_posts_list(request, event_id: int):
     # GET: 공연 존재 확인 + 상단 공연 메타 구성(게시글 0개여도 반환)
-    event_meta = _event_summary_or_none(event_id)
+    try:
+        event_meta = _event_summary_or_none(event_id)
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     if event_meta is None:
         return common_response(False, message="존재하지 않는 공연입니다.", status=404)
 
@@ -246,7 +221,10 @@ def event_posts_list(request, event_id: int):
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
     page_posts = list(page_obj.object_list)
-    user_map = _get_user_nickname_map({p.user_id for p in page_posts})
+    try:
+        user_map = _get_user_nickname_map({p.user_id for p in page_posts})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
 
     data = {
         "event": event_meta,
@@ -263,7 +241,11 @@ def event_posts_list(request, event_id: int):
 @require_POST
 def event_posts_create(request, event_id: int):
     # 공연 존재 확인
-    if not _event_exists(event_id):
+    try:
+        exists = _event_exists(event_id)
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
+    if not exists:
         return common_response(False,message="존재하지 않는 공연입니다.", status=404)
 
     data= _parse_json(request)
@@ -290,14 +272,15 @@ def event_posts_create(request, event_id: int):
         image_url=image_url,
     )
 
-    # 게시글 작성 exp 반영 (실패해도, 작성은 성공되도록)
-    exp_result = _apply_user_exp_or_none(request.user_id, "POST")
+    try:
+        exp_result = _apply_user_exp_or_none(request.user_id, "POST")
+        user_map = _get_user_nickname_map({p.user_id})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
 
     p = Post.objects.get(post_id=p.post_id)
-    user_map = _get_user_nickname_map({p.user_id})
     resp = _post_detail(p, nickname=user_map.get(p.user_id))
-    if exp_result is not None:
-        resp["exp_result"] = exp_result
+    resp["exp_result"] = exp_result
     return common_response(True, data=resp, message="게시글 작성 성공", status=201)
 
 
@@ -320,7 +303,10 @@ def post_detail(request, post_id: int):
         return common_response(False, message="존재하지 않는 게시글입니다.", status=404)
     
     p = Post.objects.get(post_id=post_id)
-    user_map = _get_user_nickname_map({p.user_id})
+    try:
+        user_map = _get_user_nickname_map({p.user_id})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     detail = _post_detail(p, nickname=user_map.get(p.user_id))
 
     # 로그인 사용자일 때만 my_reaction 추가
@@ -377,7 +363,10 @@ def post_update(request, post_id: int):
 
     p.save()
     p = Post.objects.get(post_id=post_id)
-    user_map = _get_user_nickname_map({p.user_id})
+    try:
+        user_map = _get_user_nickname_map({p.user_id})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     return common_response(True, data=_post_detail(p, nickname=user_map.get(p.user_id)), message="게시글 수정 성공", status=200)
 
 
@@ -415,7 +404,10 @@ def post_comments_list(request, post_id: int):
     paginator = Paginator(qs, size)
     page_obj = paginator.get_page(page)
     page_comments = list(page_obj.object_list)
-    user_map = _get_user_nickname_map({c.user_id for c in page_comments})
+    try:
+        user_map = _get_user_nickname_map({c.user_id for c in page_comments})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
 
     data = {
         "post_id": post_id,
@@ -467,13 +459,13 @@ def comment_create(request, post_id: int):
                 )
         except Exception:
             pass
-    # 댓글 작성 exp 반영 (실패해도 댓글 작성은 성공하도록)
-    exp_result = _apply_user_exp_or_none(request.user_id, "COMMENT")
-
-    user_map = _get_user_nickname_map({c.user_id})
+    try:
+        exp_result = _apply_user_exp_or_none(request.user_id, "COMMENT")
+        user_map = _get_user_nickname_map({c.user_id})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     resp = _comment_item(c, nickname=user_map.get(c.user_id))
-    if exp_result is not None:
-        resp["exp_result"] = exp_result
+    resp["exp_result"] = exp_result
 
     return common_response(True, data=resp, message="댓글 작성 성공", status=201)
 
@@ -506,7 +498,10 @@ def comment_detail(request, comment_id: int):
     c.content = content
     c.save()
     c = Comment.objects.get(comment_id=comment_id)
-    user_map = _get_user_nickname_map({c.user_id})
+    try:
+        user_map = _get_user_nickname_map({c.user_id})
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
     return common_response(True, data=_comment_item(c, nickname=user_map.get(c.user_id)), message="댓글 수정 성공", status=200)
 
 

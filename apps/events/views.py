@@ -56,11 +56,7 @@ def _event_detail(e: Event) -> dict:
 def _favorite_count_map(event_ids):
     if not event_ids:
         return {}
-    try:
-        return internal_api.get_favorite_counts(event_ids)
-    except Exception:
-        # Internal API 전환 전/장애 시 favorite_count는 0으로 degrade
-        return {int(event_id): 0 for event_id in event_ids}
+    return internal_api.get_favorite_counts(event_ids)
 
 
 def _event_internal_summary(e: Event) -> dict:
@@ -155,46 +151,49 @@ def event_list(request):
 
     # sort 표준값
     ## sort=latest(기본), sort=favorite, sort=update, sort=name +) 내부 alias: fav, popular
-    if sort in ("favorite", "fav", "bookmark", "popular", "popularity"):
-        events = list(qs)
-        favorite_map = _favorite_count_map([e.event_id for e in events])
-        events.sort(
-            key=lambda e: (
-                -(favorite_map.get(e.event_id, 0)),
-                -(e.update_date.timestamp() if e.update_date else 0),
-                -e.event_id,
+    try:
+        if sort in ("favorite", "fav", "bookmark", "popular", "popularity"):
+            events = list(qs)
+            favorite_map = _favorite_count_map([e.event_id for e in events])
+            events.sort(
+                key=lambda e: (
+                    -(favorite_map.get(e.event_id, 0)),
+                    -(e.update_date.timestamp() if e.update_date else 0),
+                    -e.event_id,
+                )
             )
-        )
-        paginator = Paginator(events, size)
-        page_obj = paginator.get_page(page)
-        page_events = list(page_obj.object_list)
-        page_fav_map = {e.event_id: favorite_map.get(e.event_id, 0) for e in page_events}
-        for e in page_events:
-            setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
-    elif sort in ("latest", "recent"):
-        qs = qs.order_by("-start_date", "-event_id")
-        paginator = Paginator(qs, size)
-        page_obj = paginator.get_page(page)
-        page_events = list(page_obj.object_list)
-        page_fav_map = _favorite_count_map([e.event_id for e in page_events])
-        for e in page_events:
-            setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
-    elif sort in ("update",):
-        qs = qs.order_by("-update_date", "-event_id")
-        paginator = Paginator(qs, size)
-        page_obj = paginator.get_page(page)
-        page_events = list(page_obj.object_list)
-        page_fav_map = _favorite_count_map([e.event_id for e in page_events])
-        for e in page_events:
-            setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
-    else:
-        qs = qs.order_by("title", "event_id")
-        paginator = Paginator(qs, size)
-        page_obj = paginator.get_page(page)
-        page_events = list(page_obj.object_list)
-        page_fav_map = _favorite_count_map([e.event_id for e in page_events])
-        for e in page_events:
-            setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
+            paginator = Paginator(events, size)
+            page_obj = paginator.get_page(page)
+            page_events = list(page_obj.object_list)
+            page_fav_map = {e.event_id: favorite_map.get(e.event_id, 0) for e in page_events}
+            for e in page_events:
+                setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
+        elif sort in ("latest", "recent"):
+            qs = qs.order_by("-start_date", "-event_id")
+            paginator = Paginator(qs, size)
+            page_obj = paginator.get_page(page)
+            page_events = list(page_obj.object_list)
+            page_fav_map = _favorite_count_map([e.event_id for e in page_events])
+            for e in page_events:
+                setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
+        elif sort in ("update",):
+            qs = qs.order_by("-update_date", "-event_id")
+            paginator = Paginator(qs, size)
+            page_obj = paginator.get_page(page)
+            page_events = list(page_obj.object_list)
+            page_fav_map = _favorite_count_map([e.event_id for e in page_events])
+            for e in page_events:
+                setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
+        else:
+            qs = qs.order_by("title", "event_id")
+            paginator = Paginator(qs, size)
+            page_obj = paginator.get_page(page)
+            page_events = list(page_obj.object_list)
+            page_fav_map = _favorite_count_map([e.event_id for e in page_events])
+            for e in page_events:
+                setattr(e, "favorite_count", int(page_fav_map.get(e.event_id, 0)))
+    except internal_api.InternalApiError:
+        return common_response(False, message="내부 API 호출 실패", status=502)
 
     data = {
         "events": [_event_summary(e) for e in page_events],
