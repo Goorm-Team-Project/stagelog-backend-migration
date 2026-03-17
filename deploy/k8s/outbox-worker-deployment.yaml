@@ -26,8 +26,8 @@ spec:
         - |
           set -eu
           while true; do
-            python manage.py publish_outbox_notifications \
-              --database="${OUTBOX_DATABASE:-default}" \
+            python manage.py publish_outbox_all_databases \
+              --databases="${OUTBOX_DATABASES:-default,auth_db,events_db}" \
               --limit="${OUTBOX_PUBLISH_BATCH_SIZE:-50}" \
               --max-retries="${OUTBOX_MAX_RETRIES:-5}" \
               --retry-base-delay-seconds="${OUTBOX_RETRY_BASE_DELAY_SECONDS:-30}";
@@ -36,8 +36,8 @@ spec:
         env:
         - name: DJANGO_SETTINGS_MODULE
           value: config.settings
-        - name: OUTBOX_DATABASE
-          value: default
+        - name: OUTBOX_DATABASES
+          value: default,auth_db,events_db
         - name: OUTBOX_PUBLISH_INTERVAL_SECONDS
           value: "3"
         # 기존 백엔드 배포와 동일한 Secret 사용

@@ -13,10 +13,9 @@
 
 - [ ] EKS 구성 후 Outbox Worker Deployment 적용
   - `deploy/k8s/outbox-worker-deployment.yaml`의 `image`, `serviceAccountName`, `secretRef` 실제 값으로 치환
-  - `deploy/k8s/outbox-worker-auth-deployment.yaml`의 `image`, `serviceAccountName`, `secretRef` 실제 값으로 치환
+  - `OUTBOX_DATABASES=default,auth_db,events_db` 주입 확인
   - 워커 ServiceAccount에 EventBridge `events:PutEvents` 권한(IRSA/Role) 연결
   - `kubectl apply -f deploy/k8s/outbox-worker-deployment.yaml`
-  - `kubectl apply -f deploy/k8s/outbox-worker-auth-deployment.yaml`
   - 워커 로그/상태 확인 (`kubectl logs`, `kubectl get pods`)으로 outbox 발행 검증
 
 - [ ] Notification Consumer(SQS -> DynamoDB) 배포

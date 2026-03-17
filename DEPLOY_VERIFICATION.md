@@ -6,14 +6,11 @@
 - `python manage.py migrate --database=events_db`
 
 ## 2) Outbox Worker
-- core worker/apply:
+- worker/apply:
   - `kubectl apply -f deploy/k8s/outbox-worker-deployment.yaml`
-- auth worker/apply:
-  - `kubectl apply -f deploy/k8s/outbox-worker-auth-deployment.yaml`
 - 상태 확인:
   - `kubectl get deploy,pods | rg outbox-worker`
   - `kubectl logs deploy/stagelog-outbox-worker --tail=100`
-  - `kubectl logs deploy/stagelog-outbox-worker-auth --tail=100`
 
 ## 3) Notification Consumer
 - `kubectl apply -f deploy/k8s/notification-consumer-deployment.yaml`

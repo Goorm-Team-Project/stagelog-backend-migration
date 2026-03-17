@@ -20,7 +20,7 @@ python manage.py migrate --database=events_db
 
 ## 2) Outbox 워커 실행 커맨드 전환
 
-현재 단일 DB 커맨드(`publish_outbox_notifications`) 대신, 멀티 DB 커맨드 사용:
+멀티 DB 커맨드(`publish_outbox_all_databases`) 사용:
 
 ```bash
 python manage.py publish_outbox_all_databases \
