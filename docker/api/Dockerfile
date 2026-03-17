@@ -20,6 +20,6 @@ RUN pip install --upgrade pip && pip install -r requirements.txt
 COPY . /app/
 
 # 소스는 volume mount로 개발(빠른 빌드). 운영에서는 COPY 방식으로 변경
-EXPOSE 80
+EXPOSE 8000
 
-CMD ["sh", "-lc", "python manage.py collectstatic --noinput && python manage.py migrate && gunicorn --bind 0.0.0.0:80 config.wsgi:application --access-logfile - --error-logfile - --log-level debug --capture-output --timeout 120"]
+CMD ["sh", "-lc", "python manage.py collectstatic --noinput && python manage.py migrate --database=default && python manage.py migrate --database=auth_db && python manage.py migrate --database=events_db && gunicorn --bind 0.0.0.0:8000 config.wsgi:application --access-logfile - --error-logfile - --log-level debug --capture-output --timeout 120"]

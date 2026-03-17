@@ -23,6 +23,7 @@ from bookmarks import views as bookmarks_views
 from uploads import views as uploads_views
 from users import views as users_views
 from common.utils import health_check
+from notifications import views as notifications_views
 
 urlpatterns = [
     #admin은 Django 기본 구조상 prefix에 / 포함
@@ -56,14 +57,16 @@ urlpatterns = [
 
     # Posts (posts 라우팅)
     path('api/posts', posts_views.posts_list, name='posts_list'),
+    path('api/posts/<int:event_id>/inquiry', posts_views.event_posts_list, name='event_posts_inquiry'),
+    path('api/posts/<int:event_id>/write', posts_views.event_posts_create, name='event_posts_write'),
     path('api/posts/', include('posts.urls')),
 
     # Comments 라우팅
     path('api/comments/', include('posts.comment_urls')),
 
-    # Notifications 라우팅 [notification-service 이관]
-    # path('api/notifications', notifications_views.get_notification_list, name='get_notification_list'),
-    # path('api/notifications/', include('notifications.urls')),
+    # Notifications 라우팅 
+    path('api/notifications', notifications_views.get_notification_list, name='get_notification_list'),
+    path('api/notifications/', include('notifications.urls')),
 
     path('', health_check),
 

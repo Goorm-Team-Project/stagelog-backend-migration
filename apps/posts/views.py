@@ -207,12 +207,8 @@ def posts_list(request):
 
 # 공연별 > 게시글 목록
 @csrf_exempt
-@require_http_methods(["GET", "POST"])
+@require_GET
 def event_posts_list(request, event_id: int):
-
-    if request.method == "POST":
-        return event_posts_create(request, event_id)
-
     # GET: 공연 존재 확인 + 상단 공연 메타 구성(게시글 0개여도 반환)
     event_meta = _event_summary_or_none(event_id)
     if event_meta is None:
