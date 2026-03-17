@@ -4,9 +4,13 @@ WORKDIR /app
 
 # mysqlclient 빌드에 필요한 의존성(목적: WSL/로컬 차이 제거)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential pkg-config \
+    build-essential \
+    pkg-config \
     libmariadb-dev \
     ca-certificates \
+    curl \
+    && update-ca-certificates \
+    && curl -fsSL https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem -o /etc/ssl/certs/rds-global-bundle.pem \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
