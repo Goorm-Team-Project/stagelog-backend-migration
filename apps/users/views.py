@@ -17,6 +17,7 @@ from apps.common.utils import (
 # redirect, HttpResponse 임포트 확인
 from django.shortcuts import redirect
 from django.http import HttpResponse, JsonResponse
+from bookmarks.models import Bookmark
 
 User = get_user_model()
 
@@ -376,7 +377,7 @@ def internal_apply_user_exp(request, user_id):
 #             refresh_token = create_refresh_token(user.user_id)
 # 
 #             RefreshToken.objects.create(user=user, token=refresh_token)
-#             bookmarked_id = list(user.bookmarks.values_list('event_id', flat=True))
+#             bookmarked_id = list(Bookmark.objects.filter(user_id=user.user_id).values_list('event_id', flat=True))
 # 
 #             response = common_response(
 #                 success=True,
@@ -483,7 +484,7 @@ def internal_apply_user_exp(request, user_id):
 #             traceback.print_exc()
 #             return common_response(success=False, message="서버 내부 오류", status=500)
 #         try:
-#             bookmarked_id = list(user.bookmarks.values_list('event_id', flat=True))
+#             bookmarked_id = list(Bookmark.objects.filter(user_id=user.user_id).values_list('event_id', flat=True))
 #         except Exception as e:
 #             return common_response(success=False, message="서버 내부 오류", status=500)
 #         
@@ -523,7 +524,7 @@ def internal_apply_user_exp(request, user_id):
 # def me(request):
 #     try:
 #         user = User.objects.get(user_id=request.user_id)
-#         bookmarked_id = list(user.bookmarks.values_list('event_id', flat=True))
+#         bookmarked_id = list(Bookmark.objects.filter(user_id=user.user_id).values_list('event_id', flat=True))
 # 
 #         return common_response(
 #             success=True,
@@ -551,7 +552,7 @@ def get_user_info(request):
     try:
         user_id = request.user_id
         user = User.objects.get(user_id=user_id)
-        bookmarked_id = list(user.bookmarks.values_list('event_id', flat=True))
+        bookmarked_id = list(Bookmark.objects.filter(user_id=user.user_id).values_list('event_id', flat=True))
 
         return common_response(
             success=True,
@@ -615,7 +616,7 @@ def update_user_profile(request):
         try:
             body = json.loads(request.body)
         except json.JSONDecodeError:
-            return common_response(success=False, message="잘못된 JSON 형식입니다.", status=404)
+            return common_response(success=False, message="잘못된 JSON 형식입니다.", status=400)
         
         # ... (중략: 수정 로직) ...
         if 'nickname' in body:
@@ -636,7 +637,7 @@ def update_user_profile(request):
             user.save()
         except IntegrityError:
             return common_response(False, message="이미 존재하는 닉네임입니다.", status=409)
-        bookmarked_id = list(user.bookmarks.values_list('event_id', flat=True))
+        bookmarked_id = list(Bookmark.objects.filter(user_id=user.user_id).values_list('event_id', flat=True))
 
         return common_response(
             success=True,
