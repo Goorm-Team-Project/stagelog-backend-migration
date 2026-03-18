@@ -20,3 +20,6 @@ certs/
 docker-compose.override.yml
 
 certs/*
+
+dist/
+build/
