@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import Any, Dict, Iterable, List, Optional
 
 import requests
 from django.conf import settings
+
+logger = logging.getLogger(__name__)
 
 
 class InternalApiError(Exception):
@@ -19,19 +22,30 @@ def _request_json(
     url: str,
     *,
     payload: Optional[Dict[str, Any]] = None,
-    timeout: tuple[float, float] = (0.3, 0.7),
+    timeout: tuple[float, float] = (1.0, 3.0),
 ) -> Dict[str, Any]:
     try:
+        logger.info("internal_api request method=%s url=%s", method, url)
         resp = requests.request(method, url, json=payload, timeout=timeout)
     except requests.RequestException as exc:
+        logger.warning("internal_api request_failed method=%s url=%s error=%s", method, url, exc)
         raise InternalApiError(str(exc)) from exc
 
     if resp.status_code >= 400:
+        logger.warning(
+            "internal_api bad_status method=%s url=%s status=%s body=%s",
+            method,
+            url,
+            resp.status_code,
+            resp.text[:200],
+        )
         raise InternalApiError(f"{resp.status_code}: {resp.text[:200]}")
 
     try:
+        logger.info("internal_api success method=%s url=%s status=%s", method, url, resp.status_code)
         return resp.json()
     except ValueError as exc:
+        logger.warning("internal_api invalid_json method=%s url=%s", method, url)
         raise InternalApiError("invalid json response") from exc
 
 
