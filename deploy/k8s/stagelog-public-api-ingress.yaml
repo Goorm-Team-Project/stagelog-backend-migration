@@ -29,6 +29,20 @@ spec:
             name: auth-svc
             port:
               number: 8000
+      - path: /prod/api/users
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-svc
+            port:
+              number: 8000
+      - path: /prod/api/users/
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-svc
+            port:
+              number: 8000
       - path: /api/events
         pathType: Prefix
         backend:
@@ -37,6 +51,20 @@ spec:
             port:
               number: 8000
       - path: /api/events/
+        pathType: Prefix
+        backend:
+          service:
+            name: events-svc
+            port:
+              number: 8000
+      - path: /prod/api/events
+        pathType: Prefix
+        backend:
+          service:
+            name: events-svc
+            port:
+              number: 8000
+      - path: /prod/api/events/
         pathType: Prefix
         backend:
           service:
@@ -57,7 +85,28 @@ spec:
             name: auth-svc
             port:
               number: 8000
+      - path: /prod/api/bookmarks
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-svc
+            port:
+              number: 8000
+      - path: /prod/api/bookmarks/
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-svc
+            port:
+              number: 8000
       - path: /api/
+        pathType: Prefix
+        backend:
+          service:
+            name: core-svc
+            port:
+              number: 8000
+      - path: /prod/api/
         pathType: Prefix
         backend:
           service:

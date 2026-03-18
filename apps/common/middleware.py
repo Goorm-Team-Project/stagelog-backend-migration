@@ -47,3 +47,26 @@ class AutoBanMiddleware:
             return common_response(success=False, message="너무 많은 요청으로 차단되었습니다.", status=429)
 
         return self.get_response(request)
+
+
+class ApiGatewayStageStripMiddleware:
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+        from django.conf import settings
+
+        self.stage_name = getattr(settings, "API_GATEWAY_STAGE_NAME", "prod").strip("/")
+
+    def __call__(self, request):
+        stage_prefix = f"/{self.stage_name}/" if self.stage_name else ""
+        stage_root = f"/{self.stage_name}" if self.stage_name else ""
+
+        if self.stage_name and request.path_info.startswith(stage_prefix):
+            rewritten_path = request.path_info[len(self.stage_name) + 1 :]
+            request.path_info = rewritten_path or "/"
+            request.META["PATH_INFO"] = request.path_info
+        elif self.stage_name and request.path_info == stage_root:
+            request.path_info = "/"
+            request.META["PATH_INFO"] = "/"
+
+        return self.get_response(request)

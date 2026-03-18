@@ -15,7 +15,7 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env('DEBUG')
 db_mode = env('DB_MODE', default='sqlite')
 ALLOWED_HOSTS = env.list('ALLOWED_HOSTS', default=[])
-ALLOW_CIDR_NETS = env.list('ALLOW_CIDR_NETS', default=['10.1.0.0/16'])
+ALLOWED_CIDR_NETS = env.list('ALLOWED_CIDR_NETS', default=['10.1.0.0/16'])
 
 # 2. 앱 설정 (DRF, SimpleJWT 제거)
 INSTALLED_APPS = [
@@ -40,6 +40,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'allow_cidr.middleware.AllowCIDRMiddleware',
+    'common.middleware.ApiGatewayStageStripMiddleware',
     'corsheaders.middleware.CorsMiddleware', # 최상단
     'django.middleware.security.SecurityMiddleware',
     'common.middleware.AutoBanMiddleware',
@@ -146,6 +147,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://pearlinvest.click",
 ]
 # 8-1. Internal API routing (service-to-service)
+API_GATEWAY_STAGE_NAME = env("API_GATEWAY_STAGE_NAME", default="prod")
 USE_INTERNAL_SERVICE_API = env.bool("USE_INTERNAL_SERVICE_API", default=False)
 AUTH_INTERNAL_BASE_URL = env("AUTH_INTERNAL_BASE_URL", default="")
 EVENTS_INTERNAL_BASE_URL = env("EVENTS_INTERNAL_BASE_URL", default="")
