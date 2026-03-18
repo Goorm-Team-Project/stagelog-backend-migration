@@ -1,21 +1,10 @@
 from django.core.paginator import Paginator
-from django.http import JsonResponse
-from .models import Notification
 from common.utils import common_response, login_check
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_safe, require_http_methods 
 
-def _notification_summary(n: Notification) -> dict:
-    return {
-        "notification_id": n.notification_id,
-        "type": n.type,
-        "message": n.message,
-        "is_read": n.is_read,
-        "created_at": n.created_at.isoformat(),
-        "post_id": n.post_id if n.post_id else None,
-        "event_id": n.event_id if n.event_id else None,
-        "relate_url": n.relate_url if n.relate_url else None
-    }
+from . import store
+
 
 @require_safe
 @csrf_exempt
@@ -31,17 +20,26 @@ def get_notification_list(request):
         except ValueError:
             return common_response(success=False, message="page는 정수여야 합니다.", status=400)
 
-        qs = Notification.objects.filter(user_id=user_id).order_by('-created_at')
-
         type_param = (request.GET.get('type') or "").strip()
-        if type_param and type_param in Notification.Type.values:
-            qs = qs.filter(type=type_param)
+        notifications = store.list_notifications(user_id, type_filter=type_param or None)
 
-        paginator = Paginator(qs, size)
+        paginator = Paginator(notifications, size)
         page_obj = paginator.get_page(page)
 
         data = {
-            "notifications": [_notification_summary(n) for n in page_obj.object_list],
+            "notifications": [
+                {
+                    "notification_id": row["notification_id"],
+                    "type": row["type"],
+                    "message": row["message"],
+                    "is_read": row["is_read"],
+                    "created_at": row["created_at"],
+                    "post_id": row["post_id"],
+                    "event_id": row["event_id"],
+                    "relate_url": row["relate_url"],
+                }
+                for row in page_obj.object_list
+            ],
             "has_next": page_obj.has_next(),
             "total_count": paginator.count,
         }
@@ -59,10 +57,7 @@ def get_unread_notification(request):
     try:
         user_id = request.user_id
 
-        unread_count = Notification.objects.filter(
-            user_id=user_id,
-            is_read=False
-        ).count()
+        unread_count = store.unread_count(user_id)
 
         return common_response(success=True, message="체크 완료", data={
                 "has_unread": unread_count > 0,
@@ -78,18 +73,11 @@ def get_unread_notification(request):
 @login_check
 def read_notification(request, notification_id):
     try:
-        notification = Notification.objects.get(
-            notification_id=notification_id, 
-            user_id=request.user_id 
-        )
-        
-        if not notification.is_read:
-            notification.is_read = True
-            notification.save()
+        updated = store.mark_notification_read(request.user_id, notification_id)
+        if not updated:
+            return common_response(success=False, message="존재하지 않는 알림입니다.", status=404)
 
         return common_response(success=True, message="읽음 처리 완료", status=200)
 
-    except Notification.DoesNotExist:
-        return common_response(success=False, message="존재하지 않는 알림입니다.", status=404)
     except Exception as e:
         return common_response(success=False, message="서버 에러", status=500)

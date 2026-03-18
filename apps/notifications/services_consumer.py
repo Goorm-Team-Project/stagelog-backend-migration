@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+import hashlib
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
@@ -60,12 +61,15 @@ def _to_dynamodb_item(detail: dict) -> dict:
     event_id = detail.get("event_id") or f"missing-{int(now.timestamp() * 1000)}"
     user_id = str(detail.get("recipient_user_id") or "unknown")
     ttl = int((now + timedelta(days=settings.NOTIFICATION_DDB_TTL_DAYS)).timestamp())
+    sk = f"NOTI#{occurred_at}#{event_id}"
+    notification_id = int(hashlib.sha256(sk.encode("utf-8")).hexdigest()[:13], 16)
 
     return {
         "pk": f"USER#{user_id}",
-        "sk": f"NOTI#{occurred_at}#{event_id}",
+        "sk": sk,
         "gsi1pk": f"USER#{user_id}",
         "gsi1sk": occurred_at,
+        "notification_id": notification_id,
         "event_id": event_id,
         "recipient_user_id": int(detail.get("recipient_user_id") or 0),
         "type": detail.get("type", "notice"),
