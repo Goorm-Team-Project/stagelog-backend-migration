@@ -2,7 +2,7 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: stagelog-public-api
-  namespace: dev-monolith
+  namespace: dev-backend
   annotations:
     kubernetes.io/ingress.class: alb
     alb.ingress.kubernetes.io/scheme: internal
@@ -15,20 +15,6 @@ spec:
   rules:
   - http:
       paths:
-      - path: /api/users
-        pathType: Prefix
-        backend:
-          service:
-            name: auth-svc
-            port:
-              number: 8000
-      - path: /api/users/
-        pathType: Prefix
-        backend:
-          service:
-            name: auth-svc
-            port:
-              number: 8000
       - path: /prod/api/users
         pathType: Prefix
         backend:
@@ -41,20 +27,6 @@ spec:
         backend:
           service:
             name: auth-svc
-            port:
-              number: 8000
-      - path: /api/events
-        pathType: Prefix
-        backend:
-          service:
-            name: events-svc
-            port:
-              number: 8000
-      - path: /api/events/
-        pathType: Prefix
-        backend:
-          service:
-            name: events-svc
             port:
               number: 8000
       - path: /prod/api/events
@@ -71,20 +43,6 @@ spec:
             name: events-svc
             port:
               number: 8000
-      - path: /api/bookmarks
-        pathType: Prefix
-        backend:
-          service:
-            name: auth-svc
-            port:
-              number: 8000
-      - path: /api/bookmarks/
-        pathType: Prefix
-        backend:
-          service:
-            name: auth-svc
-            port:
-              number: 8000
       - path: /prod/api/bookmarks
         pathType: Prefix
         backend:
@@ -99,11 +57,18 @@ spec:
             name: auth-svc
             port:
               number: 8000
-      - path: /api/
+      - path: /prod/api/notifications
         pathType: Prefix
         backend:
           service:
-            name: core-svc
+            name: notifications-svc
+            port:
+              number: 8000
+      - path: /prod/api/notifications/
+        pathType: Prefix
+        backend:
+          service:
+            name: notifications-svc
             port:
               number: 8000
       - path: /prod/api/
