@@ -15,63 +15,63 @@ spec:
   rules:
   - http:
       paths:
-      - path: /prod/api/users
+      - path: /api/users
         pathType: Prefix
         backend:
           service:
             name: auth-svc
             port:
               number: 8000
-      - path: /prod/api/users/
+      - path: /api/users/
         pathType: Prefix
         backend:
           service:
             name: auth-svc
             port:
               number: 8000
-      - path: /prod/api/events
+      - path: /api/events
         pathType: Prefix
         backend:
           service:
             name: events-svc
             port:
               number: 8000
-      - path: /prod/api/events/
+      - path: /api/events/
         pathType: Prefix
         backend:
           service:
             name: events-svc
             port:
               number: 8000
-      - path: /prod/api/bookmarks
+      - path: /api/bookmarks
         pathType: Prefix
         backend:
           service:
             name: auth-svc
             port:
               number: 8000
-      - path: /prod/api/bookmarks/
+      - path: /api/bookmarks/
         pathType: Prefix
         backend:
           service:
             name: auth-svc
             port:
               number: 8000
-      - path: /prod/api/notifications
+      - path: /api/notifications
         pathType: Prefix
         backend:
           service:
             name: notifications-svc
             port:
               number: 8000
-      - path: /prod/api/notifications/
+      - path: /api/notifications/
         pathType: Prefix
         backend:
           service:
             name: notifications-svc
             port:
               number: 8000
-      - path: /prod/api/
+      - path: /api/
         pathType: Prefix
         backend:
           service:
