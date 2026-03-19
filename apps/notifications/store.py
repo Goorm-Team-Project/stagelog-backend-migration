@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
 import boto3
 from boto3.dynamodb.conditions import Key
@@ -15,8 +15,8 @@ def _user_pk(user_id: int) -> str:
     return f"USER#{int(user_id)}"
 
 
-def _notification_sk(notification_id: int) -> str:
-    return f"NOTI#{int(notification_id)}"
+def _notification_sk(notification_id: Union[int, str]) -> str:
+    return f"NOTI#{int(str(notification_id))}"
 
 
 def _meta_counts_sk() -> str:
@@ -25,7 +25,9 @@ def _meta_counts_sk() -> str:
 
 def _item_to_notification(item: Dict) -> Dict:
     return {
-        "notification_id": int(item["notification_id"]),
+        # Return notification IDs as strings so the frontend does not lose
+        # precision when handling values larger than JS safe integers.
+        "notification_id": str(int(item["notification_id"])),
         "type": item.get("type"),
         "message": item.get("message"),
         "is_read": bool(item.get("is_read", False)),
@@ -78,7 +80,7 @@ def unread_count(user_id: int) -> int:
     return max(0, int(item.get("unread_count") or 0))
 
 
-def mark_notification_read(user_id: int, notification_id: int) -> bool:
+def mark_notification_read(user_id: int, notification_id: Union[int, str]) -> bool:
     table = _notification_table()
     key = {
         "pk": _user_pk(user_id),
