@@ -19,8 +19,7 @@ spec:
       serviceAccountName: stagelog-backend-sa
       containers:
       - name: outbox-worker
-        # 실제 백엔드 이미지 태그로 교체
-        image: your-dockerhub/stagelog-repo:api
+        image: 430118823715.dkr.ecr.ap-northeast-2.amazonaws.com/stagelog-backend:latest
         imagePullPolicy: Always
         command: ["/bin/sh", "-c"]
         args:
@@ -61,7 +60,7 @@ spec:
       volumes:
       - name: backend-env-file
         secret:
-          secretName: stagelog-backend-env
+          secretName: dev-secret
           items:
           - key: .env
             path: .env
