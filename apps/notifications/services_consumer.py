@@ -7,9 +7,20 @@ import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.utils import timezone
-import redis
 
 logger = logging.getLogger(__name__)
+
+
+def _user_pk(user_id: int) -> str:
+    return f"USER#{int(user_id)}"
+
+
+def _notification_sk(notification_id: int) -> str:
+    return f"NOTI#{int(notification_id)}"
+
+
+def _meta_counts_sk() -> str:
+    return "META#COUNTS"
 
 
 def _sqs_client():
@@ -19,19 +30,6 @@ def _sqs_client():
 def _notification_table():
     dynamodb = boto3.resource("dynamodb", region_name=settings.AWS_REGION)
     return dynamodb.Table(settings.NOTIFICATION_DDB_TABLE_NAME)
-
-
-def _redis_client():
-    return redis.Redis(
-        host=settings.REDIS_HOST,
-        port=settings.REDIS_PORT,
-        db=settings.REDIS_DB,
-        password=settings.REDIS_PASSWORD or None,
-        ssl=settings.REDIS_SSL,
-        decode_responses=True,
-        socket_timeout=1,
-        socket_connect_timeout=1,
-    )
 
 
 def _parse_sqs_message_body(body: str) -> dict:
@@ -62,36 +60,41 @@ def _to_dynamodb_item(detail: dict) -> dict:
     now = timezone.now()
     occurred_at = detail.get("occurred_at") or now.isoformat()
     event_id = detail.get("event_id") or f"missing-{int(now.timestamp() * 1000)}"
-    user_id = str(detail.get("recipient_user_id") or "unknown")
+    user_id = int(detail.get("recipient_user_id") or 0)
     ttl = int((now + timedelta(days=settings.NOTIFICATION_DDB_TTL_DAYS)).timestamp())
-    sk = f"NOTI#{occurred_at}#{event_id}"
-    notification_id = int(hashlib.sha256(sk.encode("utf-8")).hexdigest()[:13], 16)
+    notification_seed = f"USER#{user_id}#EVENT#{event_id}#AT#{occurred_at}"
+    notification_id = int(hashlib.sha256(notification_seed.encode("utf-8")).hexdigest()[:15], 16)
 
     return {
-        "pk": f"USER#{user_id}",
-        "sk": sk,
-        "gsi1pk": f"USER#{user_id}",
-        "gsi1sk": occurred_at,
+        "pk": _user_pk(user_id),
+        "sk": _notification_sk(notification_id),
+        "gsi1pk": _user_pk(user_id),
+        "gsi1sk": f"TS#{occurred_at}#{notification_id}",
         "notification_id": notification_id,
         "event_id": event_id,
-        "recipient_user_id": int(detail.get("recipient_user_id") or 0),
+        "recipient_user_id": user_id,
         "type": detail.get("type", "notice"),
         "message": detail.get("message", ""),
         "relate_url": detail.get("relate_url"),
         "post_id": detail.get("post_id"),
-        "event_ref_id": detail.get("related_event_id"),
+        "related_event_id": detail.get("related_event_id"),
         "is_read": False,
         "created_at": occurred_at,
         "ttl": ttl,
     }
-
-
-def _incr_unread_cache(rds, user_id: int):
-    if not user_id:
-        return
-    key = f"noti:unread:{user_id}"
-    rds.incr(key)
-    rds.expire(key, settings.NOTIFICATION_UNREAD_CACHE_TTL_SECONDS)
+def _incr_unread_count(table, user_id: int):
+    table.update_item(
+        Key={
+            "pk": _user_pk(user_id),
+            "sk": _meta_counts_sk(),
+        },
+        UpdateExpression="SET unread_count = if_not_exists(unread_count, :zero) + :one, updated_at = :updated_at",
+        ExpressionAttributeValues={
+            ":zero": 0,
+            ":one": 1,
+            ":updated_at": timezone.now().isoformat(),
+        },
+    )
 
 
 def consume_notification_batch(
@@ -106,13 +109,6 @@ def consume_notification_batch(
 
     sqs = _sqs_client()
     table = _notification_table()
-    redis_client = None
-    if settings.REDIS_HOST:
-        try:
-            redis_client = _redis_client()
-            redis_client.ping()
-        except Exception:
-            redis_client = None
 
     receive_kwargs = {
         "QueueUrl": queue_url,
@@ -142,6 +138,7 @@ def consume_notification_batch(
                 Item=item,
                 ConditionExpression="attribute_not_exists(pk) AND attribute_not_exists(sk)",
             )
+            _incr_unread_count(table, item.get("recipient_user_id"))
             saved += 1
             logger.info(
                 "notification_consumer saved event_id=%s user_id=%s notification_id=%s",
@@ -149,8 +146,6 @@ def consume_notification_batch(
                 item.get("recipient_user_id"),
                 item.get("notification_id"),
             )
-            if redis_client:
-                _incr_unread_cache(redis_client, item.get("recipient_user_id"))
 
             if receipt_handle:
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
