@@ -1,5 +1,6 @@
 import json
 from datetime import timedelta
+import logging
 
 import boto3
 from django.conf import settings
@@ -7,6 +8,8 @@ from django.db import DatabaseError, transaction
 from django.utils import timezone
 
 from common.models import OutboxEvent
+
+logger = logging.getLogger(__name__)
 
 
 def _eventbridge_client():
@@ -37,6 +40,12 @@ def publish_outbox_batch(
     retry_base_delay_seconds: int = 30,
 ):
     now = timezone.now()
+    logger.info(
+        "outbox_publisher batch_start database=%s aggregate_type=%s limit=%s",
+        database,
+        aggregate_type,
+        limit,
+    )
     manager = OutboxEvent.objects.using(database)
     qs = manager.filter(status=OutboxEvent.Status.PENDING, available_at__lte=now)
     if aggregate_type:
@@ -49,6 +58,10 @@ def publish_outbox_batch(
             events = list(qs.select_for_update().order_by("outbox_id")[:limit])
 
         if not events:
+            logger.info(
+                "outbox_publisher batch_end database=%s picked=0 published=0 failed=0",
+                database,
+            )
             return {"picked": 0, "published": 0, "failed": 0}
 
         entries = _build_entries(events, settings.NOTIFICATION_EVENT_BUS_NAME)
@@ -57,6 +70,7 @@ def publish_outbox_batch(
             response = _eventbridge_client().put_events(Entries=entries)
             result_entries = response.get("Entries", [])
         except Exception:
+            logger.exception("outbox_publisher put_events_failed database=%s", database)
             result_entries = [{} for _ in events]
 
         published = 0
@@ -67,11 +81,27 @@ def publish_outbox_batch(
                 event.status = OutboxEvent.Status.PUBLISHED
                 event.published_at = now
                 event.save(using=database, update_fields=["status", "published_at"])
+                logger.info(
+                    "outbox_publisher published database=%s outbox_id=%s event_type=%s event_id=%s",
+                    database,
+                    event.outbox_id,
+                    event.event_type,
+                    result.get("EventId"),
+                )
                 published += 1
                 continue
 
             failed += 1
             event.attempts += 1
+            logger.warning(
+                "outbox_publisher publish_failed database=%s outbox_id=%s event_type=%s error_code=%s error_message=%s attempts=%s",
+                database,
+                event.outbox_id,
+                event.event_type,
+                result.get("ErrorCode"),
+                result.get("ErrorMessage"),
+                event.attempts,
+            )
             if event.attempts >= max_retries:
                 event.status = OutboxEvent.Status.FAILED
                 event.save(using=database, update_fields=["status", "attempts"])
@@ -81,4 +111,11 @@ def publish_outbox_batch(
             event.available_at = now + timedelta(seconds=retry_base_delay_seconds * event.attempts)
             event.save(using=database, update_fields=["status", "attempts", "available_at"])
 
+        logger.info(
+            "outbox_publisher batch_end database=%s picked=%s published=%s failed=%s",
+            database,
+            len(events),
+            published,
+            failed,
+        )
         return {"picked": len(events), "published": published, "failed": failed}

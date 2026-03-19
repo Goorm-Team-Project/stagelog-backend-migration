@@ -1,12 +1,15 @@
 import json
 from datetime import timedelta
 import hashlib
+import logging
 
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 from django.conf import settings
 from django.utils import timezone
 import redis
+
+logger = logging.getLogger(__name__)
 
 
 def _sqs_client():
@@ -98,6 +101,7 @@ def consume_notification_batch(
     wait_time_seconds: int = 20,
 ):
     if not queue_url:
+        logger.warning("notification_consumer empty_queue_url")
         return {"received": 0, "saved": 0, "deleted": 0, "failed": 0, "reason": "empty_queue_url"}
 
     sqs = _sqs_client()
@@ -119,7 +123,10 @@ def consume_notification_batch(
     response = sqs.receive_message(**receive_kwargs)
     messages = response.get("Messages", [])
     if not messages:
+        logger.info("notification_consumer received=0 saved=0 deleted=0 failed=0")
         return {"received": 0, "saved": 0, "deleted": 0, "failed": 0}
+
+    logger.info("notification_consumer batch_start received=%s", len(messages))
 
     saved = 0
     deleted = 0
@@ -127,6 +134,7 @@ def consume_notification_batch(
 
     for msg in messages:
         receipt_handle = msg.get("ReceiptHandle")
+        detail = {}
         try:
             detail = _parse_sqs_message_body(msg.get("Body", ""))
             item = _to_dynamodb_item(detail)
@@ -135,6 +143,12 @@ def consume_notification_batch(
                 ConditionExpression="attribute_not_exists(pk) AND attribute_not_exists(sk)",
             )
             saved += 1
+            logger.info(
+                "notification_consumer saved event_id=%s user_id=%s notification_id=%s",
+                detail.get("event_id"),
+                item.get("recipient_user_id"),
+                item.get("notification_id"),
+            )
             if redis_client:
                 _incr_unread_cache(redis_client, item.get("recipient_user_id"))
 
@@ -144,15 +158,38 @@ def consume_notification_batch(
         except ClientError as exc:
             error_code = exc.response.get("Error", {}).get("Code")
             if error_code == "ConditionalCheckFailedException":
+                logger.info(
+                    "notification_consumer duplicate event_id=%s user_id=%s",
+                    detail.get("event_id"),
+                    detail.get("recipient_user_id"),
+                )
                 if receipt_handle:
                     sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
                     deleted += 1
                 continue
+            logger.warning(
+                "notification_consumer client_error event_id=%s user_id=%s code=%s",
+                detail.get("event_id"),
+                detail.get("recipient_user_id"),
+                error_code,
+            )
             failed += 1
             continue
         except (json.JSONDecodeError, BotoCoreError, ValueError, TypeError):
             # 저장/파싱 실패 시 delete하지 않고 재시도 또는 DLQ로 이동시킨다.
+            logger.exception(
+                "notification_consumer failed event_id=%s user_id=%s",
+                detail.get("event_id"),
+                detail.get("recipient_user_id"),
+            )
             failed += 1
             continue
 
+    logger.info(
+        "notification_consumer batch_end received=%s saved=%s deleted=%s failed=%s",
+        len(messages),
+        saved,
+        deleted,
+        failed,
+    )
     return {"received": len(messages), "saved": saved, "deleted": deleted, "failed": failed}
