@@ -83,18 +83,6 @@ def _to_dynamodb_item(detail: dict) -> dict:
     }
 
 
-def _mark_event_deduped(rds, event_id: str) -> bool:
-    """
-    True: 처음 처리 이벤트
-    False: 이미 처리된 이벤트(중복)
-    """
-    if not event_id:
-        return True
-    key = f"noti:dedupe:event:{event_id}"
-    created = rds.set(key, "1", ex=settings.NOTIFICATION_DEDUPE_TTL_SECONDS, nx=True)
-    return bool(created)
-
-
 def _incr_unread_cache(rds, user_id: int):
     if not user_id:
         return
@@ -141,13 +129,6 @@ def consume_notification_batch(
         receipt_handle = msg.get("ReceiptHandle")
         try:
             detail = _parse_sqs_message_body(msg.get("Body", ""))
-            event_id = detail.get("event_id")
-            if redis_client and not _mark_event_deduped(redis_client, event_id):
-                if receipt_handle:
-                    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
-                    deleted += 1
-                continue
-
             item = _to_dynamodb_item(detail)
             table.put_item(
                 Item=item,
@@ -160,7 +141,16 @@ def consume_notification_batch(
             if receipt_handle:
                 sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
                 deleted += 1
-        except (json.JSONDecodeError, BotoCoreError, ClientError, ValueError, TypeError):
+        except ClientError as exc:
+            error_code = exc.response.get("Error", {}).get("Code")
+            if error_code == "ConditionalCheckFailedException":
+                if receipt_handle:
+                    sqs.delete_message(QueueUrl=queue_url, ReceiptHandle=receipt_handle)
+                    deleted += 1
+                continue
+            failed += 1
+            continue
+        except (json.JSONDecodeError, BotoCoreError, ValueError, TypeError):
             # 저장/파싱 실패 시 delete하지 않고 재시도 또는 DLQ로 이동시킨다.
             failed += 1
             continue
